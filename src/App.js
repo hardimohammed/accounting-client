@@ -1,0 +1,626 @@
+// ============================================================
+//  src/App.js — Complete App with all real pages wired
+// ============================================================
+import React from 'react';
+import JournalListPage from './pages/accounts/JournalListPage';
+import JournalFormPage from './pages/accounts/JournalFormPage';
+import SustainabilityPage from './pages/sustainability/SustainabilityPage';
+import UsersPage          from './pages/users/UsersPage';
+import { BrowserRouter, Routes, Route,
+         Navigate, useNavigate, Outlet } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider, useAuth } from './context/AuthContext';
+
+// ── Real Pages ────────────────────────────────────────────────
+import DashboardPage    from './pages/dashboard/DashboardPage';
+import CustomerListPage from './pages/customers/CustomerListPage';
+import CustomerDetailPage from './pages/customers/CustomerDetailPage';
+import InvoiceListPage  from './pages/invoices/InvoiceListPage';
+import InvoiceFormPage  from './pages/invoices/InvoiceFormPage';
+import InvoiceDetailPage from './pages/invoices/InvoiceDetailPage';
+import SupplierListPage from './pages/suppliers/SupplierListPage';
+import BillListPage     from './pages/bills/BillListPage';
+import BillFormPage     from './pages/bills/BillFormPage';
+import AccountListPage  from './pages/accounts/AccountListPage';
+import ReportsPage      from './pages/reports/ReportsPage';
+import AssetListPage    from './pages/assets/AssetListPage';
+import AssetFormPage    from './pages/assets/AssetFormPage';
+import InventoryPage    from './pages/inventory/InventoryPage';
+import ProjectListPage  from './pages/projects/ProjectListPage';
+import ProjectDetailPage from './pages/projects/ProjectDetailPage';
+import QuotationListPage from './pages/sales/QuotationListPage';
+import PurchaseOrderPage from './pages/purchasing/PurchaseOrderListPage';
+import TaxDashboardPage from './pages/tax/TaxDashboardPage';
+import PayrollPage      from './pages/payroll/PayrollPage';
+import AgentPage        from './pages/agent/AgentPage';
+import SettingsPage     from './pages/settings/SettingsPage';
+import GoLiveWizard     from './pages/settings/GoLiveWizard';
+import PeriodClosePage  from './pages/settings/PeriodClosePage';
+import PublicInvoicePage from './pages/public/PublicInvoicePage';
+
+// ── Remaining stubs ───────────────────────────────────────────
+function Stub({ title }) {
+  const nav = useNavigate();
+  return (
+    <div style={{ display:'flex', alignItems:'center',
+      justifyContent:'center', height:'65vh',
+      fontFamily:'sans-serif' }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontSize:40, marginBottom:12 }}>📋</div>
+        <h2 style={{ fontSize:20, fontWeight:700,
+          marginBottom:8, color:'#1a2740' }}>{title}</h2>
+        <p style={{ color:'#6b7fa3', fontSize:13,
+          marginBottom:20 }}>
+          Connected to the API and ready.
+        </p>
+        <button onClick={() => nav('/dashboard')}
+          style={{ padding:'10px 24px',
+            background:'#1e6bbd', color:'white',
+            border:'none', borderRadius:8, fontSize:13,
+            fontWeight:600, cursor:'pointer' }}>
+          Back to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const TaxReturnPage      = () => <Stub title="Tax Return"          />;
+const BankPage           = () => <Stub title="Bank Reconciliation" />;
+
+// ── Login Page ────────────────────────────────────────────────
+function LoginPage() {
+  const { login } = useAuth();
+  const nav = useNavigate();
+  const [form, setForm] = React.useState({
+    email: '', password: '' });
+  const [loading, setLoading] = React.useState(false);
+  const [error,   setError]   = React.useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await login(form.email, form.password);
+      nav('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Login failed. Check credentials.');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#f4f6f9',
+      display:'flex', alignItems:'center',
+      justifyContent:'center', fontFamily:'sans-serif' }}>
+      <div style={{ background:'white', borderRadius:14,
+        padding:40, width:400,
+        boxShadow:'0 8px 32px rgba(13,27,42,.12)' }}>
+        <div style={{ textAlign:'center', marginBottom:32 }}>
+          <div style={{ width:52, height:52, borderRadius:14,
+            background:'linear-gradient(135deg,#2d84e0,#3d9fff)',
+            display:'flex', alignItems:'center',
+            justifyContent:'center', fontSize:22,
+            fontWeight:800, color:'white',
+            margin:'0 auto 14px' }}>F</div>
+          <h2 style={{ fontSize:22, fontWeight:800,
+            color:'#1a2740', marginBottom:4 }}>
+            FinSuite Pro
+          </h2>
+          <p style={{ fontSize:12, color:'#6b7fa3' }}>
+            Sign in to your account
+          </p>
+        </div>
+        {error && (
+          <div style={{ background:'#fff5f5',
+            border:'1px solid #fca5a5', borderRadius:8,
+            padding:'10px 14px', marginBottom:16,
+            fontSize:12, color:'#c04040' }}>
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:'block', fontSize:11,
+              fontWeight:600, color:'#1a2740',
+              marginBottom:7 }}>Email Address</label>
+            <input type="email" value={form.email}
+              required autoComplete="email"
+              onChange={e =>
+                setForm({ ...form, email:e.target.value })}
+              style={{ width:'100%', padding:'11px 14px',
+                border:'1.5px solid #e2e8f0',
+                borderRadius:9, fontSize:13,
+                outline:'none', fontFamily:'sans-serif',
+                boxSizing:'border-box' }}/>
+          </div>
+          <div style={{ marginBottom:24 }}>
+            <label style={{ display:'block', fontSize:11,
+              fontWeight:600, color:'#1a2740',
+              marginBottom:7 }}>Password</label>
+            <input type="password" value={form.password}
+              required autoComplete="current-password"
+              onChange={e =>
+                setForm({ ...form, password:e.target.value })}
+              style={{ width:'100%', padding:'11px 14px',
+                border:'1.5px solid #e2e8f0',
+                borderRadius:9, fontSize:13,
+                outline:'none', fontFamily:'sans-serif',
+                boxSizing:'border-box' }}/>
+          </div>
+          <button type="submit" disabled={loading}
+            style={{ width:'100%', padding:13,
+              background: loading
+                ? '#6b7fa3' : '#1e6bbd',
+              color:'white', border:'none',
+              borderRadius:9, fontSize:14,
+              fontWeight:700, cursor:'pointer',
+              fontFamily:'sans-serif',
+              transition:'background .2s' }}>
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+        <p style={{ textAlign:'center', marginTop:20,
+          fontSize:12, color:'#6b7fa3' }}>
+          No account?{' '}
+          <span onClick={() => nav('/register')}
+            style={{ color:'#1e6bbd', fontWeight:600,
+              cursor:'pointer' }}>
+            Register here
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Register Page ─────────────────────────────────────────────
+// A fiscal year is a 12-month period — end is always exactly one
+// year minus a day after start. Ghanaian SMEs almost universally
+// use a calendar-year fiscal year, so only fiscalYearStart is a
+// user-facing field; the end date is derived, never independently
+// editable (there was previously no way to edit it at all, and its
+// hardcoded default silently went stale every year — a new org
+// registered in 2026 got a fiscal year already two years in the
+// past, or — if a user only changed the start date — an end date
+// before the start date, since nothing kept them in sync).
+const oneYearMinusOneDay = (startDateStr) => {
+  const d = new Date(startDateStr);
+  d.setFullYear(d.getFullYear() + 1);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+
+function RegisterPage() {
+  const { register } = useAuth();
+  const nav = useNavigate();
+  const [loading, setLoading] = React.useState(false);
+  const [error,   setError]   = React.useState('');
+  const defaultFiscalYearStart = `${new Date().getFullYear()}-01-01`;
+  const [form, setForm] = React.useState({
+    orgName:'', fiscalYearStart: defaultFiscalYearStart,
+    fiscalYearEnd: oneYearMinusOneDay(defaultFiscalYearStart), baseCurrency:'GHS',
+    firstName:'', lastName:'', email:'', password:'',
+  });
+
+  const upd = (f, v) => setForm(p => f === 'fiscalYearStart'
+    ? { ...p, fiscalYearStart: v, fiscalYearEnd: oneYearMinusOneDay(v) }
+    : { ...p, [f]: v });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.password.length < 8)
+      return setError('Password must be at least 8 characters');
+    setLoading(true);
+    setError('');
+    try {
+      await register(form);
+      nav('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Registration failed');
+    } finally { setLoading(false); }
+  };
+
+  const inp = { width:'100%', padding:'10px 12px',
+    border:'1.5px solid #e2e8f0', borderRadius:8,
+    fontSize:13, outline:'none', fontFamily:'sans-serif',
+    background:'#f9fafb', boxSizing:'border-box' };
+  const lbl = { display:'block', fontSize:11,
+    fontWeight:600, color:'#1a2740', marginBottom:6 };
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#f4f6f9',
+      display:'flex', alignItems:'center',
+      justifyContent:'center', fontFamily:'sans-serif',
+      padding:20 }}>
+      <div style={{ background:'white', borderRadius:14,
+        padding:40, width:'100%', maxWidth:480,
+        boxShadow:'0 8px 32px rgba(13,27,42,.12)' }}>
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ width:44, height:44, borderRadius:11,
+            background:'linear-gradient(135deg,#2d84e0,#3d9fff)',
+            display:'flex', alignItems:'center',
+            justifyContent:'center', fontSize:18,
+            fontWeight:800, color:'white',
+            margin:'0 auto 10px' }}>F</div>
+          <h2 style={{ fontSize:18, fontWeight:700,
+            color:'#1a2740' }}>Create Account</h2>
+        </div>
+        {error && (
+          <div style={{ background:'#fff5f5',
+            border:'1px solid #fca5a5', borderRadius:8,
+            padding:'10px 14px', marginBottom:16,
+            fontSize:12, color:'#c04040' }}>{error}</div>
+        )}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Organisation Name *</label>
+            <input style={inp} required
+              placeholder="e.g. Asante Group Ltd"
+              value={form.orgName}
+              onChange={e=>upd('orgName',e.target.value)}/>
+          </div>
+          <div style={{ display:'grid',
+            gridTemplateColumns:'1fr 1fr',
+            gap:12, marginBottom:14 }}>
+            <div>
+              <label style={lbl}>First Name *</label>
+              <input style={inp} required
+                value={form.firstName}
+                onChange={e=>upd('firstName',e.target.value)}/>
+            </div>
+            <div>
+              <label style={lbl}>Last Name</label>
+              <input style={inp} value={form.lastName}
+                onChange={e=>upd('lastName',e.target.value)}/>
+            </div>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Email *</label>
+            <input style={inp} type="email" required
+              value={form.email}
+              onChange={e=>upd('email',e.target.value)}/>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Password * (min 8 chars)</label>
+            <input style={inp} type="password"
+              required minLength={8}
+              value={form.password}
+              onChange={e=>upd('password',e.target.value)}/>
+          </div>
+          <div style={{ display:'grid',
+            gridTemplateColumns:'1fr 1fr',
+            gap:12, marginBottom:14 }}>
+            <div>
+              <label style={lbl}>Base Currency</label>
+              <select style={{ ...inp, background:'#f9fafb' }}
+                value={form.baseCurrency}
+                onChange={e=>upd('baseCurrency',e.target.value)}>
+                {['GHS','USD','EUR','GBP','NGN',
+                  'KES','ZAR'].map(c=>(
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Fiscal Year Start</label>
+              <input style={inp} type="date"
+                value={form.fiscalYearStart}
+                onChange={e=>upd('fiscalYearStart',
+                  e.target.value)}/>
+            </div>
+          </div>
+          <button type="submit" disabled={loading}
+            style={{ width:'100%', padding:12,
+              background: loading ? '#6b7fa3' : '#1e6bbd',
+              color:'white', border:'none', borderRadius:8,
+              fontSize:14, fontWeight:700, cursor:'pointer',
+              fontFamily:'sans-serif', marginTop:8 }}>
+            {loading?'Creating...':'Create Account'}
+          </button>
+        </form>
+        <p style={{ textAlign:'center', marginTop:16,
+          fontSize:12, color:'#6b7fa3' }}>
+          Already have an account?{' '}
+          <span onClick={() => nav('/login')}
+            style={{ color:'#1e6bbd', fontWeight:600,
+              cursor:'pointer' }}>Sign in</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── App Layout ────────────────────────────────────────────────
+function AppLayout() {
+  const { user, logout } = useAuth();
+  const nav = useNavigate();
+  const loc = window.location.pathname;
+
+  const NAV = [
+    { path:'/dashboard',      label:'Dashboard',         icon:'📊' },
+    { path:'/invoices',       label:'Invoices',          icon:'🧾' },
+    { path:'/customers',      label:'Customers',         icon:'👥' },
+    { path:'/bills',          label:'Bills',             icon:'📄' },
+    { path:'/suppliers',      label:'Suppliers',         icon:'🏭' },
+    { path:'/accounts',       label:'Chart of Accounts', icon:'📒' },
+    { path:'/journals',       label:'Journals',          icon:'📔' },
+    { path:'/assets',         label:'Fixed Assets',      icon:'🏗️' },
+    { path:'/inventory',      label:'Inventory',         icon:'📦' },
+    { path:'/projects',       label:'Projects',          icon:'📁' },
+    { path:'/tax',            label:'Tax',               icon:'🧮' },
+    { path:'/payroll',        label:'Payroll',           icon:'👔' },
+    { path:'/agent',          label:'Agent',             icon:'🤖' },
+    { path:'/reports',        label:'Reports',           icon:'📈' },
+    { path:'/sustainability', label:'Sustainability',    icon:'🌱' },
+    { path:'/users',          label:'Users',             icon:'👤' },
+    { path:'/settings',       label:'Settings',          icon:'⚙️' },
+  ];
+
+  const initials = user
+    ? `${(user.firstName||user.first_name||'U')[0].toUpperCase()}${(user.lastName||user.last_name||'')[0]?.toUpperCase()||''}`
+    : 'U';
+
+  const currentPage = NAV.find(n =>
+    loc === n.path ||
+    (n.path !== '/dashboard' && loc.startsWith(n.path))
+  );
+
+  return (
+    <div style={{ display:'flex', height:'100vh',
+      fontFamily:'sans-serif', overflow:'hidden' }}>
+
+      {/* Sidebar */}
+      <div style={{ width:222, background:'#0d1b2a',
+        display:'flex', flexDirection:'column',
+        flexShrink:0, overflowY:'auto' }}>
+
+        {/* Brand */}
+        <div style={{ padding:'20px 16px',
+          borderBottom:'1px solid rgba(255,255,255,.08)',
+          flexShrink:0 }}>
+          <div style={{ display:'flex',
+            alignItems:'center', gap:10 }}>
+            <div style={{ width:36, height:36,
+              borderRadius:10,
+              background:'linear-gradient(135deg,#2d84e0,#3d9fff)',
+              display:'flex', alignItems:'center',
+              justifyContent:'center', fontSize:16,
+              fontWeight:800, color:'white',
+              flexShrink:0 }}>F</div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700,
+                color:'white' }}>FinSuite Pro</div>
+              <div style={{ fontSize:10,
+                color:'rgba(255,255,255,.4)' }}>
+                Accounting
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <div style={{ flex:1, padding:'8px 0',
+          overflowY:'auto' }}>
+          {NAV.map(item => {
+            const active = loc === item.path ||
+              (item.path !== '/dashboard' &&
+               loc.startsWith(item.path));
+            return (
+              <div key={item.path}
+                onClick={() => nav(item.path)}
+                style={{ display:'flex', alignItems:'center',
+                  gap:10, padding:'9px 16px',
+                  cursor:'pointer', fontSize:13,
+                  transition:'all .15s',
+                  color: active
+                    ? 'white'
+                    : 'rgba(255,255,255,.55)',
+                  background: active
+                    ? 'rgba(45,132,224,.2)'
+                    : 'transparent',
+                  borderRight: active
+                    ? '3px solid #3d9fff'
+                    : '3px solid transparent',
+                  fontWeight: active ? 600 : 400 }}>
+                <span style={{ fontSize:15 }}>
+                  {item.icon}
+                </span>
+                <span>{item.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* User */}
+        <div style={{ padding:12,
+          borderTop:'1px solid rgba(255,255,255,.08)',
+          flexShrink:0 }}>
+          <div
+            onClick={() => { logout(); nav('/login'); }}
+            style={{ display:'flex', alignItems:'center',
+              gap:10, padding:'8px', borderRadius:8,
+              cursor:'pointer',
+              transition:'background .15s' }}>
+            <div style={{ width:32, height:32,
+              borderRadius:8, flexShrink:0,
+              background:'linear-gradient(135deg,#e8a04a,#f0bc78)',
+              display:'flex', alignItems:'center',
+              justifyContent:'center', fontSize:12,
+              fontWeight:700, color:'#0d1b2a' }}>
+              {initials}
+            </div>
+            <div style={{ flex:1, overflow:'hidden' }}>
+              <div style={{ fontSize:12, fontWeight:600,
+                color:'white', overflow:'hidden',
+                textOverflow:'ellipsis',
+                whiteSpace:'nowrap' }}>
+                {user
+                  ? `${user.firstName||user.first_name||''} ${user.lastName||user.last_name||''}`
+                  : 'User'}
+              </div>
+              <div style={{ fontSize:10,
+                color:'rgba(255,255,255,.4)' }}>
+                Click to sign out
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div style={{ flex:1, display:'flex',
+        flexDirection:'column', overflow:'hidden' }}>
+
+        {/* Top bar */}
+        <div style={{ height:54, background:'white',
+          borderBottom:'1px solid #e2e8f0',
+          display:'flex', alignItems:'center',
+          padding:'0 24px', flexShrink:0,
+          justifyContent:'space-between' }}>
+          <div style={{ fontSize:16, fontWeight:700,
+            color:'#1a2740' }}>
+            {currentPage?.label || 'FinSuite Pro'}
+          </div>
+          <div style={{ fontSize:12, color:'#6b7fa3' }}>
+            {new Date().toLocaleDateString('en-GB', {
+              weekday:'long', day:'2-digit',
+              month:'long', year:'numeric' })}
+          </div>
+        </div>
+
+        {/* Page content */}
+        <div style={{ flex:1, overflowY:'auto',
+          padding:24, background:'#f4f6f9' }}>
+          <Outlet/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Route Guards ──────────────────────────────────────────────
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center',
+      justifyContent:'center', height:'100vh',
+      fontFamily:'sans-serif', color:'#6b7fa3',
+      flexDirection:'column', gap:16 }}>
+      <div style={{ width:32, height:32,
+        border:'3px solid #e2e8f0',
+        borderTopColor:'#1e6bbd', borderRadius:'50%',
+        animation:'spin .7s linear infinite' }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <p style={{ fontSize:13 }}>Loading...</p>
+    </div>
+  );
+  return isAuthenticated
+    ? children
+    : <Navigate to="/login" replace/>;
+}
+
+function PublicRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated
+    ? <Navigate to="/dashboard" replace/>
+    : children;
+}
+
+// ── Root ──────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Toaster position="top-right" toastOptions={{
+          style:{ fontFamily:'sans-serif',
+            fontSize:13, borderRadius:8 },
+        }}/>
+        <Routes>
+          {/* Public */}
+          <Route path="/login"
+            element={<PublicRoute><LoginPage/></PublicRoute>}/>
+          <Route path="/register"
+            element={<PublicRoute><RegisterPage/></PublicRoute>}/>
+          {/* Truly public — no login gate either way, this is what a
+              customer with no staff account opens */}
+          <Route path="/pay/:token" element={<PublicInvoicePage/>}/>
+
+          {/* Protected */}
+          <Route path="/"
+            element={
+              <ProtectedRoute><AppLayout/></ProtectedRoute>}>
+            <Route index
+              element={<Navigate to="/dashboard" replace/>}/>
+            <Route path="dashboard"
+              element={<DashboardPage/>}/>
+            <Route path="invoices"
+              element={<InvoiceListPage/>}/>
+            <Route path="invoices/new"
+              element={<InvoiceFormPage/>}/>
+            <Route path="invoices/:id"
+              element={<InvoiceDetailPage/>}/>
+            <Route path="invoices/:id/edit"
+              element={<InvoiceFormPage/>}/>
+            <Route path="quotations"
+              element={<QuotationListPage/>}/>
+            <Route path="customers"
+              element={<CustomerListPage/>}/>
+            <Route path="customers/:id"
+              element={<CustomerDetailPage/>}/>
+            <Route path="bills"
+              element={<BillListPage/>}/>
+            <Route path="bills/new"
+              element={<BillFormPage/>}/>
+            <Route path="suppliers"
+              element={<SupplierListPage/>}/>
+            <Route path="purchase-orders"
+              element={<PurchaseOrderPage/>}/>
+            <Route path="accounts"
+              element={<AccountListPage/>}/>
+            <Route path="journals"
+              element={<JournalListPage/>}/>
+            <Route path="journals/new"
+              element={<JournalFormPage/>}/>
+            <Route path="assets"
+              element={<AssetListPage/>}/>
+            <Route path="assets/new"
+              element={<AssetFormPage/>}/>
+            <Route path="assets/:id/edit"
+              element={<AssetFormPage/>}/>
+            <Route path="inventory"
+              element={<InventoryPage/>}/>
+            <Route path="projects"
+              element={<ProjectListPage/>}/>
+            <Route path="projects/:id"
+              element={<ProjectDetailPage/>}/>
+            <Route path="tax"
+              element={<TaxDashboardPage/>}/>
+            <Route path="payroll"
+              element={<PayrollPage/>}/>
+            <Route path="agent"
+              element={<AgentPage/>}/>
+            <Route path="tax/returns/new"
+              element={<TaxReturnPage/>}/>
+            <Route path="reports"
+              element={<ReportsPage/>}/>
+            <Route path="sustainability"
+              element={<SustainabilityPage/>}/>
+            <Route path="banks"
+              element={<BankPage/>}/>
+            <Route path="users"
+              element={<UsersPage/>}/>
+            <Route path="settings"
+              element={<SettingsPage/>}/>
+            <Route path="settings/go-live"
+              element={<GoLiveWizard/>}/>
+            <Route path="settings/period-close"
+              element={<PeriodClosePage/>}/>
+            <Route path="*"
+              element={<Navigate to="/dashboard" replace/>}/>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
