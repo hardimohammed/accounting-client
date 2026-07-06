@@ -38,6 +38,7 @@ export const usersAPI = {
   list:   (params) => api.get('/users', { params }),
   invite: (data)   => api.post('/users/invite', data),
   update: (id, data) => api.put(`/users/${id}`, data),
+  resetPassword: (id, newPassword) => api.put(`/users/${id}/reset-password`, { newPassword }),
 };
 
 // ── Roles (admin-editable per-role module permissions) ────────

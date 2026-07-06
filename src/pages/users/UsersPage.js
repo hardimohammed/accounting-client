@@ -218,6 +218,9 @@ export default function UsersPage() {
     firstName:'', lastName:'', email:'',
     password:'', role:'Accountant',
   });
+  const [resetTarget, setResetTarget] = useState(null); // user object, or null
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -283,6 +286,23 @@ export default function UsersPage() {
     } catch (err) {
       alert(err.message || 'Failed to update role');
     }
+  };
+
+  // The only way to get a locked-out worker back in used to be direct
+  // DB access — changePassword needs the user's own current password,
+  // and forgotPassword/resetPassword never actually sent anything.
+  const handleResetPassword = async () => {
+    if (!resetPassword || resetPassword.length < 8)
+      return alert('Password must be at least 8 characters');
+    setResetting(true);
+    try {
+      await usersAPI.resetPassword(resetTarget.id, resetPassword);
+      alert(`Password reset for ${resetTarget.email}. Share the new password with them directly — this doesn't get emailed automatically.`);
+      setResetTarget(null);
+      setResetPassword('');
+    } catch (err) {
+      alert(err.message || 'Failed to reset password');
+    } finally { setResetting(false); }
   };
 
   const fmtDate = (d) => d
@@ -549,33 +569,46 @@ export default function UsersPage() {
                       {fmtDate(user.created_at)}
                     </td>
                     <td style={{ padding:'12px 16px' }}>
-                      {user.is_active !== 0 ? (
+                      <div style={{ display:'flex', gap:6 }}>
                         <button
-                          onClick={() =>
-                            handleDeactivate(user.id)}
+                          onClick={() => { setResetTarget(user); setResetPassword(''); }}
                           style={{ padding:'5px 10px',
                             borderRadius:6,
-                            border:'1px solid #e05c5c',
+                            border:'1px solid #6b7fa3',
                             background:'none',
-                            color:'#e05c5c', fontSize:11,
+                            color:'#6b7fa3', fontSize:11,
                             fontWeight:600,
                             cursor:'pointer' }}>
-                          Deactivate
+                          Reset Password
                         </button>
-                      ) : (
-                        <button
-                          onClick={() =>
-                            handleReactivate(user.id)}
-                          style={{ padding:'5px 10px',
-                            borderRadius:6,
-                            border:'1px solid #16c79a',
-                            background:'none',
-                            color:'#0ea87f', fontSize:11,
-                            fontWeight:600,
-                            cursor:'pointer' }}>
-                          Reactivate
-                        </button>
-                      )}
+                        {user.is_active !== 0 ? (
+                          <button
+                            onClick={() =>
+                              handleDeactivate(user.id)}
+                            style={{ padding:'5px 10px',
+                              borderRadius:6,
+                              border:'1px solid #e05c5c',
+                              background:'none',
+                              color:'#e05c5c', fontSize:11,
+                              fontWeight:600,
+                              cursor:'pointer' }}>
+                            Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleReactivate(user.id)}
+                            style={{ padding:'5px 10px',
+                              borderRadius:6,
+                              border:'1px solid #16c79a',
+                              background:'none',
+                              color:'#0ea87f', fontSize:11,
+                              fontWeight:600,
+                              cursor:'pointer' }}>
+                            Reactivate
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -667,6 +700,46 @@ export default function UsersPage() {
                 fontWeight:700,
                 cursor:saving?'not-allowed':'pointer' }}>
               {saving ? 'Adding...' : 'Add User'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal open={!!resetTarget}
+        onClose={() => setResetTarget(null)}
+        title={`Reset Password${resetTarget ? ` — ${resetTarget.first_name} ${resetTarget.last_name}` : ''}`}>
+        <div>
+          <p style={{ fontSize:12, color:'#6b7fa3', marginBottom:14 }}>
+            This sets a new password immediately — {resetTarget?.email} doesn't
+            need their old one, and nothing is emailed automatically. Share the
+            new password with them directly.
+          </p>
+          <label style={lbl}>New Password * (min 8 chars)</label>
+          <input style={inp} type="text"
+            placeholder="Type a temporary password"
+            value={resetPassword}
+            onChange={e => setResetPassword(e.target.value)}/>
+          <div style={{ display:'flex', gap:10,
+            justifyContent:'flex-end', marginTop:20 }}>
+            <button onClick={() => setResetTarget(null)}
+              style={{ padding:'10px 20px',
+                borderRadius:8,
+                border:'1px solid #e2e8f0',
+                background:'white', color:'#6b7fa3',
+                fontSize:13, fontWeight:600,
+                cursor:'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={handleResetPassword}
+              disabled={resetting}
+              style={{ padding:'10px 20px',
+                borderRadius:8, border:'none',
+                background:resetting?'#6b7fa3':'#1e6bbd',
+                color:'white', fontSize:13,
+                fontWeight:700,
+                cursor:resetting?'not-allowed':'pointer' }}>
+              {resetting ? 'Resetting...' : 'Reset Password'}
             </button>
           </div>
         </div>
