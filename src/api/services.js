@@ -40,6 +40,13 @@ export const usersAPI = {
   update: (id, data) => api.put(`/users/${id}`, data),
 };
 
+// ── Roles (admin-editable per-role module permissions) ────────
+export const rolesAPI = {
+  list:              () => api.get('/roles'),
+  listModules:        () => api.get('/roles/modules'),
+  updatePermissions: (roleId, modules) => api.put(`/roles/${roleId}/permissions`, { modules }),
+};
+
 // ── Chart of Accounts ─────────────────────────────────────────
 export const accountsAPI = {
   list:   (params) => api.get('/accounts', { params }),

@@ -304,32 +304,32 @@ function RegisterPage() {
 
 // ── App Layout ────────────────────────────────────────────────
 function AppLayout() {
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout, hasRole, hasModule } = useAuth();
   const nav = useNavigate();
   const loc = window.location.pathname;
 
-  // roles: undefined means open to every back-office role (still
-  // excludes Cashier, which is filtered separately below — Cashier
-  // never uses accounting-client at all, POS terminal only). Matches
-  // the same tiers enforced server-side in each route file, so a nav
-  // link never leads to a page that just redirects straight back.
+  // module: checked against the admin-editable permission set (see
+  // role.routes.js) — an Admin can grant or revoke any of these per
+  // role from Users > Role Permissions, and this list reflects that
+  // in real time on next login. roles: a hardcoded, non-customizable
+  // boundary (Users) — see the comment on RoleRoute for why.
   const ALL_NAV = [
-    { path:'/dashboard',      label:'Dashboard',         icon:'📊' },
-    { path:'/invoices',       label:'Invoices',          icon:'🧾' },
-    { path:'/customers',      label:'Customers',         icon:'👥' },
-    { path:'/bills',          label:'Bills',             icon:'📄' },
-    { path:'/suppliers',      label:'Suppliers',         icon:'🏭' },
-    { path:'/accounts',       label:'Chart of Accounts', icon:'📒', roles:['Admin','Accountant'] },
-    { path:'/journals',       label:'Journals',          icon:'📔', roles:['Admin','Accountant'] },
-    { path:'/assets',         label:'Fixed Assets',      icon:'🏗️', roles:['Admin','Accountant'] },
-    { path:'/inventory',      label:'Inventory',         icon:'📦' },
-    { path:'/projects',       label:'Projects',          icon:'📁', roles:['Admin','Accountant','Manager','Viewer'] },
-    { path:'/tax',            label:'Tax',               icon:'🧮', roles:['Admin','Accountant'] },
-    { path:'/payroll',        label:'Payroll',           icon:'👔', roles:['Admin','Accountant'] },
-    { path:'/agent',          label:'Agent',             icon:'🤖', roles:['Admin','Accountant','Manager'] },
-    { path:'/reports',        label:'Reports',           icon:'📈', roles:['Admin','Accountant','Manager','Viewer'] },
-    { path:'/sustainability', label:'Sustainability',    icon:'🌱', roles:['Admin','Accountant','Manager','Viewer'] },
-    { path:'/banks',          label:'Banks',             icon:'🏦', roles:['Admin','Accountant'] },
+    { path:'/dashboard',      label:'Dashboard',         icon:'📊', module:'dashboard' },
+    { path:'/invoices',       label:'Invoices',          icon:'🧾', module:'invoices' },
+    { path:'/customers',      label:'Customers',         icon:'👥', module:'customers' },
+    { path:'/bills',          label:'Bills',             icon:'📄', module:'bills' },
+    { path:'/suppliers',      label:'Suppliers',         icon:'🏭', module:'suppliers' },
+    { path:'/accounts',       label:'Chart of Accounts', icon:'📒', module:'accounts' },
+    { path:'/journals',       label:'Journals',          icon:'📔', module:'journals' },
+    { path:'/assets',         label:'Fixed Assets',      icon:'🏗️', module:'assets' },
+    { path:'/inventory',      label:'Inventory',         icon:'📦', module:'inventory' },
+    { path:'/projects',       label:'Projects',          icon:'📁', module:'projects' },
+    { path:'/tax',            label:'Tax',               icon:'🧮', module:'tax' },
+    { path:'/payroll',        label:'Payroll',           icon:'👔', module:'payroll' },
+    { path:'/agent',          label:'Agent',             icon:'🤖', module:'agent' },
+    { path:'/reports',        label:'Reports',           icon:'📈', module:'reports' },
+    { path:'/sustainability', label:'Sustainability',    icon:'🌱', module:'sustainability' },
+    { path:'/banks',          label:'Banks',             icon:'🏦', module:'banks' },
     { path:'/users',          label:'Users',             icon:'👤', roles:['Admin'] },
     { path:'/settings',       label:'Settings',          icon:'⚙️' },
   ];
@@ -339,9 +339,12 @@ function AppLayout() {
   // case), which would make this specific exclusion check true for
   // Admins too and hide the entire nav for them.
   const isCashierOnly = user?.roles?.includes('Cashier');
-  const NAV = ALL_NAV.filter(item =>
-    !isCashierOnly && (!item.roles || item.roles.some(r => hasRole(r)))
-  );
+  const NAV = ALL_NAV.filter(item => {
+    if (isCashierOnly) return false;
+    if (item.module) return hasModule(item.module);
+    if (item.roles) return item.roles.some(r => hasRole(r));
+    return true;
+  });
 
   const initials = user
     ? `${(user.firstName||user.first_name||'U')[0].toUpperCase()}${(user.lastName||user.last_name||'')[0]?.toUpperCase()||''}`
@@ -515,8 +518,17 @@ function ProtectedRoute({ children }) {
 // implicitly satisfying any role check, so `roles` doesn't need to
 // list 'Admin' explicitly — it's included below anyway for the same
 // readability reason the backend's authorize(...) calls do.
-function RoleRoute({ roles, children }) {
-  const { isAuthenticated, loading, hasRole } = useAuth();
+// Two ways to gate a route:
+//  - `module="accounts"` — checked against the admin-editable
+//    permission set (accounting-api's role.routes.js lets an Admin
+//    change which modules a role can see; this is most routes).
+//  - `roles={['Admin']}` — a hardcoded, non-customizable boundary
+//    (Users, Go-Live, Period Close). These deliberately stay
+//    role-name checks, not modules — letting "who can manage users"
+//    itself be reassignable would recreate the self-promotion hole
+//    the RBAC work started by closing.
+function RoleRoute({ module, roles, children }) {
+  const { isAuthenticated, loading, hasRole, hasModule } = useAuth();
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center',
       justifyContent:'center', height:'100vh',
@@ -531,7 +543,8 @@ function RoleRoute({ roles, children }) {
     </div>
   );
   if (!isAuthenticated) return <Navigate to="/login" replace/>;
-  return roles.some(r => hasRole(r))
+  const allowed = module ? hasModule(module) : roles.some(r => hasRole(r));
+  return allowed
     ? children
     : <Navigate to="/dashboard" replace/>;
 }
@@ -569,59 +582,59 @@ export default function App() {
             <Route index
               element={<Navigate to="/dashboard" replace/>}/>
             <Route path="dashboard"
-              element={<DashboardPage/>}/>
+              element={<RoleRoute module="dashboard"><DashboardPage/></RoleRoute>}/>
             <Route path="invoices"
-              element={<InvoiceListPage/>}/>
+              element={<RoleRoute module="invoices"><InvoiceListPage/></RoleRoute>}/>
             <Route path="invoices/new"
-              element={<InvoiceFormPage/>}/>
+              element={<RoleRoute module="invoices"><InvoiceFormPage/></RoleRoute>}/>
             <Route path="invoices/:id"
-              element={<InvoiceDetailPage/>}/>
+              element={<RoleRoute module="invoices"><InvoiceDetailPage/></RoleRoute>}/>
             <Route path="invoices/:id/edit"
-              element={<InvoiceFormPage/>}/>
+              element={<RoleRoute module="invoices"><InvoiceFormPage/></RoleRoute>}/>
             <Route path="quotations"
-              element={<QuotationListPage/>}/>
+              element={<RoleRoute module="quotations"><QuotationListPage/></RoleRoute>}/>
             <Route path="customers"
-              element={<CustomerListPage/>}/>
+              element={<RoleRoute module="customers"><CustomerListPage/></RoleRoute>}/>
             <Route path="customers/:id"
-              element={<CustomerDetailPage/>}/>
+              element={<RoleRoute module="customers"><CustomerDetailPage/></RoleRoute>}/>
             <Route path="bills"
-              element={<BillListPage/>}/>
+              element={<RoleRoute module="bills"><BillListPage/></RoleRoute>}/>
             <Route path="bills/new"
-              element={<BillFormPage/>}/>
+              element={<RoleRoute module="bills"><BillFormPage/></RoleRoute>}/>
             <Route path="suppliers"
-              element={<SupplierListPage/>}/>
+              element={<RoleRoute module="suppliers"><SupplierListPage/></RoleRoute>}/>
             <Route path="purchase-orders"
-              element={<PurchaseOrderPage/>}/>
+              element={<RoleRoute module="purchase_orders"><PurchaseOrderPage/></RoleRoute>}/>
             <Route path="accounts"
-              element={<RoleRoute roles={['Admin','Accountant']}><AccountListPage/></RoleRoute>}/>
+              element={<RoleRoute module="accounts"><AccountListPage/></RoleRoute>}/>
             <Route path="journals"
-              element={<RoleRoute roles={['Admin','Accountant']}><JournalListPage/></RoleRoute>}/>
+              element={<RoleRoute module="journals"><JournalListPage/></RoleRoute>}/>
             <Route path="journals/new"
-              element={<RoleRoute roles={['Admin','Accountant']}><JournalFormPage/></RoleRoute>}/>
+              element={<RoleRoute module="journals"><JournalFormPage/></RoleRoute>}/>
             <Route path="assets"
-              element={<RoleRoute roles={['Admin','Accountant']}><AssetListPage/></RoleRoute>}/>
+              element={<RoleRoute module="assets"><AssetListPage/></RoleRoute>}/>
             <Route path="assets/new"
-              element={<RoleRoute roles={['Admin','Accountant']}><AssetFormPage/></RoleRoute>}/>
+              element={<RoleRoute module="assets"><AssetFormPage/></RoleRoute>}/>
             <Route path="assets/:id/edit"
-              element={<RoleRoute roles={['Admin','Accountant']}><AssetFormPage/></RoleRoute>}/>
+              element={<RoleRoute module="assets"><AssetFormPage/></RoleRoute>}/>
             <Route path="inventory"
-              element={<InventoryPage/>}/>
+              element={<RoleRoute module="inventory"><InventoryPage/></RoleRoute>}/>
             <Route path="projects"
-              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><ProjectListPage/></RoleRoute>}/>
+              element={<RoleRoute module="projects"><ProjectListPage/></RoleRoute>}/>
             <Route path="projects/:id"
-              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><ProjectDetailPage/></RoleRoute>}/>
+              element={<RoleRoute module="projects"><ProjectDetailPage/></RoleRoute>}/>
             <Route path="tax"
-              element={<RoleRoute roles={['Admin','Accountant']}><TaxDashboardPage/></RoleRoute>}/>
+              element={<RoleRoute module="tax"><TaxDashboardPage/></RoleRoute>}/>
             <Route path="payroll"
-              element={<RoleRoute roles={['Admin','Accountant']}><PayrollPage/></RoleRoute>}/>
+              element={<RoleRoute module="payroll"><PayrollPage/></RoleRoute>}/>
             <Route path="agent"
-              element={<RoleRoute roles={['Admin','Accountant','Manager']}><AgentPage/></RoleRoute>}/>
+              element={<RoleRoute module="agent"><AgentPage/></RoleRoute>}/>
             <Route path="reports"
-              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><ReportsPage/></RoleRoute>}/>
+              element={<RoleRoute module="reports"><ReportsPage/></RoleRoute>}/>
             <Route path="sustainability"
-              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><SustainabilityPage/></RoleRoute>}/>
+              element={<RoleRoute module="sustainability"><SustainabilityPage/></RoleRoute>}/>
             <Route path="banks"
-              element={<RoleRoute roles={['Admin','Accountant']}><BankReconciliationPage/></RoleRoute>}/>
+              element={<RoleRoute module="banks"><BankReconciliationPage/></RoleRoute>}/>
             <Route path="users"
               element={<RoleRoute roles={['Admin']}><UsersPage/></RoleRoute>}/>
             <Route path="settings"
