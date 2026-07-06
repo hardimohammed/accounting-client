@@ -37,36 +37,7 @@ import SettingsPage     from './pages/settings/SettingsPage';
 import GoLiveWizard     from './pages/settings/GoLiveWizard';
 import PeriodClosePage  from './pages/settings/PeriodClosePage';
 import PublicInvoicePage from './pages/public/PublicInvoicePage';
-
-// ── Remaining stubs ───────────────────────────────────────────
-function Stub({ title }) {
-  const nav = useNavigate();
-  return (
-    <div style={{ display:'flex', alignItems:'center',
-      justifyContent:'center', height:'65vh',
-      fontFamily:'sans-serif' }}>
-      <div style={{ textAlign:'center' }}>
-        <div style={{ fontSize:40, marginBottom:12 }}>📋</div>
-        <h2 style={{ fontSize:20, fontWeight:700,
-          marginBottom:8, color:'#1a2740' }}>{title}</h2>
-        <p style={{ color:'#6b7fa3', fontSize:13,
-          marginBottom:20 }}>
-          Connected to the API and ready.
-        </p>
-        <button onClick={() => nav('/dashboard')}
-          style={{ padding:'10px 24px',
-            background:'#1e6bbd', color:'white',
-            border:'none', borderRadius:8, fontSize:13,
-            fontWeight:600, cursor:'pointer' }}>
-          Back to Dashboard
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const TaxReturnPage      = () => <Stub title="Tax Return"          />;
-const BankPage           = () => <Stub title="Bank Reconciliation" />;
+import BankReconciliationPage from './pages/settings/BankReconciliationPage';
 
 // ── Login Page ────────────────────────────────────────────────
 function LoginPage() {
@@ -333,29 +304,44 @@ function RegisterPage() {
 
 // ── App Layout ────────────────────────────────────────────────
 function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasRole } = useAuth();
   const nav = useNavigate();
   const loc = window.location.pathname;
 
-  const NAV = [
+  // roles: undefined means open to every back-office role (still
+  // excludes Cashier, which is filtered separately below — Cashier
+  // never uses accounting-client at all, POS terminal only). Matches
+  // the same tiers enforced server-side in each route file, so a nav
+  // link never leads to a page that just redirects straight back.
+  const ALL_NAV = [
     { path:'/dashboard',      label:'Dashboard',         icon:'📊' },
     { path:'/invoices',       label:'Invoices',          icon:'🧾' },
     { path:'/customers',      label:'Customers',         icon:'👥' },
     { path:'/bills',          label:'Bills',             icon:'📄' },
     { path:'/suppliers',      label:'Suppliers',         icon:'🏭' },
-    { path:'/accounts',       label:'Chart of Accounts', icon:'📒' },
-    { path:'/journals',       label:'Journals',          icon:'📔' },
-    { path:'/assets',         label:'Fixed Assets',      icon:'🏗️' },
+    { path:'/accounts',       label:'Chart of Accounts', icon:'📒', roles:['Admin','Accountant'] },
+    { path:'/journals',       label:'Journals',          icon:'📔', roles:['Admin','Accountant'] },
+    { path:'/assets',         label:'Fixed Assets',      icon:'🏗️', roles:['Admin','Accountant'] },
     { path:'/inventory',      label:'Inventory',         icon:'📦' },
-    { path:'/projects',       label:'Projects',          icon:'📁' },
-    { path:'/tax',            label:'Tax',               icon:'🧮' },
-    { path:'/payroll',        label:'Payroll',           icon:'👔' },
-    { path:'/agent',          label:'Agent',             icon:'🤖' },
-    { path:'/reports',        label:'Reports',           icon:'📈' },
-    { path:'/sustainability', label:'Sustainability',    icon:'🌱' },
-    { path:'/users',          label:'Users',             icon:'👤' },
+    { path:'/projects',       label:'Projects',          icon:'📁', roles:['Admin','Accountant','Manager','Viewer'] },
+    { path:'/tax',            label:'Tax',               icon:'🧮', roles:['Admin','Accountant'] },
+    { path:'/payroll',        label:'Payroll',           icon:'👔', roles:['Admin','Accountant'] },
+    { path:'/agent',          label:'Agent',             icon:'🤖', roles:['Admin','Accountant','Manager'] },
+    { path:'/reports',        label:'Reports',           icon:'📈', roles:['Admin','Accountant','Manager','Viewer'] },
+    { path:'/sustainability', label:'Sustainability',    icon:'🌱', roles:['Admin','Accountant','Manager','Viewer'] },
+    { path:'/banks',          label:'Banks',             icon:'🏦', roles:['Admin','Accountant'] },
+    { path:'/users',          label:'Users',             icon:'👤', roles:['Admin'] },
     { path:'/settings',       label:'Settings',          icon:'⚙️' },
   ];
+  // Checked directly against user.roles, NOT via hasRole('Cashier') —
+  // hasRole() treats Admin as implicitly satisfying any role check
+  // (by design, for the common "does this user have permission X"
+  // case), which would make this specific exclusion check true for
+  // Admins too and hide the entire nav for them.
+  const isCashierOnly = user?.roles?.includes('Cashier');
+  const NAV = ALL_NAV.filter(item =>
+    !isCashierOnly && (!item.roles || item.roles.some(r => hasRole(r)))
+  );
 
   const initials = user
     ? `${(user.firstName||user.first_name||'U')[0].toUpperCase()}${(user.lastName||user.last_name||'')[0]?.toUpperCase()||''}`
@@ -520,6 +506,36 @@ function ProtectedRoute({ children }) {
     : <Navigate to="/login" replace/>;
 }
 
+// Guards a route to a specific set of roles — direct URL navigation
+// to a restricted page (e.g. /users, /payroll) previously worked for
+// any authenticated user regardless of role, since ProtectedRoute
+// only checked isAuthenticated. Redirects a disallowed role back to
+// the dashboard rather than rendering the page and letting its API
+// calls fail one by one with 403s. hasRole() already treats Admin as
+// implicitly satisfying any role check, so `roles` doesn't need to
+// list 'Admin' explicitly — it's included below anyway for the same
+// readability reason the backend's authorize(...) calls do.
+function RoleRoute({ roles, children }) {
+  const { isAuthenticated, loading, hasRole } = useAuth();
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center',
+      justifyContent:'center', height:'100vh',
+      fontFamily:'sans-serif', color:'#6b7fa3',
+      flexDirection:'column', gap:16 }}>
+      <div style={{ width:32, height:32,
+        border:'3px solid #e2e8f0',
+        borderTopColor:'#1e6bbd', borderRadius:'50%',
+        animation:'spin .7s linear infinite' }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <p style={{ fontSize:13 }}>Loading...</p>
+    </div>
+  );
+  if (!isAuthenticated) return <Navigate to="/login" replace/>;
+  return roles.some(r => hasRole(r))
+    ? children
+    : <Navigate to="/dashboard" replace/>;
+}
+
 function PublicRoute({ children }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated
@@ -577,45 +593,43 @@ export default function App() {
             <Route path="purchase-orders"
               element={<PurchaseOrderPage/>}/>
             <Route path="accounts"
-              element={<AccountListPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><AccountListPage/></RoleRoute>}/>
             <Route path="journals"
-              element={<JournalListPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><JournalListPage/></RoleRoute>}/>
             <Route path="journals/new"
-              element={<JournalFormPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><JournalFormPage/></RoleRoute>}/>
             <Route path="assets"
-              element={<AssetListPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><AssetListPage/></RoleRoute>}/>
             <Route path="assets/new"
-              element={<AssetFormPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><AssetFormPage/></RoleRoute>}/>
             <Route path="assets/:id/edit"
-              element={<AssetFormPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><AssetFormPage/></RoleRoute>}/>
             <Route path="inventory"
               element={<InventoryPage/>}/>
             <Route path="projects"
-              element={<ProjectListPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><ProjectListPage/></RoleRoute>}/>
             <Route path="projects/:id"
-              element={<ProjectDetailPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><ProjectDetailPage/></RoleRoute>}/>
             <Route path="tax"
-              element={<TaxDashboardPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><TaxDashboardPage/></RoleRoute>}/>
             <Route path="payroll"
-              element={<PayrollPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><PayrollPage/></RoleRoute>}/>
             <Route path="agent"
-              element={<AgentPage/>}/>
-            <Route path="tax/returns/new"
-              element={<TaxReturnPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant','Manager']}><AgentPage/></RoleRoute>}/>
             <Route path="reports"
-              element={<ReportsPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><ReportsPage/></RoleRoute>}/>
             <Route path="sustainability"
-              element={<SustainabilityPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant','Manager','Viewer']}><SustainabilityPage/></RoleRoute>}/>
             <Route path="banks"
-              element={<BankPage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><BankReconciliationPage/></RoleRoute>}/>
             <Route path="users"
-              element={<UsersPage/>}/>
+              element={<RoleRoute roles={['Admin']}><UsersPage/></RoleRoute>}/>
             <Route path="settings"
               element={<SettingsPage/>}/>
             <Route path="settings/go-live"
-              element={<GoLiveWizard/>}/>
+              element={<RoleRoute roles={['Admin']}><GoLiveWizard/></RoleRoute>}/>
             <Route path="settings/period-close"
-              element={<PeriodClosePage/>}/>
+              element={<RoleRoute roles={['Admin','Accountant']}><PeriodClosePage/></RoleRoute>}/>
             <Route path="*"
               element={<Navigate to="/dashboard" replace/>}/>
           </Route>

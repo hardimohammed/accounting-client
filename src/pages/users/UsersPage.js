@@ -3,6 +3,7 @@
 // ============================================================
 import { useState, useEffect } from 'react';
 import { usersAPI } from '../../api/services';
+import { useAuth } from '../../context/AuthContext';
 
 const ROLES = ['Admin','Accountant','Manager',
   'Viewer','Data Entry'];
@@ -66,6 +67,13 @@ function Modal({ open, onClose, title, children }) {
 }
 
 export default function UsersPage() {
+  // App.js's AdminRoute already redirects a non-Admin away before this
+  // page ever renders — this is a second, cheap layer in case that
+  // route guard is ever bypassed or this page gets embedded somewhere
+  // else later. The server enforces the real boundary either way
+  // (user.routes.js requires Admin), so this can't be worked around
+  // by just skipping the client check.
+  const { hasRole } = useAuth();
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal,   setModal]   = useState(false);
@@ -176,6 +184,23 @@ export default function UsersPage() {
 
   const activeUsers   = users.filter(u => u.is_active !== 0);
   const inactiveUsers = users.filter(u => u.is_active === 0);
+
+  if (!hasRole('Admin')) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+        height:'65vh', fontFamily:'sans-serif', textAlign:'center' }}>
+        <div>
+          <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+          <h2 style={{ fontSize:18, fontWeight:700, color:'#1a2740', marginBottom:6 }}>
+            Admins only
+          </h2>
+          <p style={{ color:'#6b7fa3', fontSize:13 }}>
+            User management is restricted to Admin accounts.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily:'sans-serif' }}>
