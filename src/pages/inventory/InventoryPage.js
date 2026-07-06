@@ -1,11 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import api from '../../api/client';
+import toast from 'react-hot-toast';
 
 const fmt  = (n) => Number(n || 0).toLocaleString('en-GH', {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
 const fmtC = (n) => `GHS ${fmt(n)}`;
+
+// Mirrors the backend's own limits (inventory.routes.js's multer
+// config) — catching an oversized or wrong-type file here means an
+// immediate, specific message instead of a round trip that fails
+// with the same error the server would have thrown anyway.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const validateImageFile = (file) => {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    return 'Only JPG, PNG, WEBP or GIF images are allowed';
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return `Image is too large (${(file.size / (1024*1024)).toFixed(1)}MB) — max 5MB`;
+  }
+  return null;
+};
 
 // REACT_APP_API_URL points at the /api/v1 base used by axios calls;
 // static /uploads files are served from the API root, so strip the
@@ -20,11 +37,13 @@ const ProductImage = ({ src, name, size = 48 }) => {
     <img src={`${API_BASE}${src}?token=${token}`} alt={name}
       onError={() => setErr(true)}
       style={{ width: size, height: size, borderRadius: 8,
-        objectFit: 'cover', flexShrink: 0 }}/>
+        objectFit: 'cover', flexShrink: 0,
+        border: '1px solid #e2e8f0' }}/>
   );
   return (
     <div style={{ width: size, height: size, borderRadius: 8,
-      background: '#e2e8f0', display: 'flex', alignItems: 'center',
+      background: '#e2e8f0', border: '1px solid #d8dee8',
+      display: 'flex', alignItems: 'center',
       justifyContent: 'center', fontSize: size * 0.4, flexShrink: 0 }}>
       📦
     </div>
@@ -86,6 +105,8 @@ const VariantsModal = ({ product, onClose }) => {
   };
 
   const handleImageUpload = async (variantId, file) => {
+    const problem = validateImageFile(file);
+    if (problem) return toast.error(problem);
     setUploadingImg(variantId);
     try {
       const fd = new FormData();
@@ -94,8 +115,9 @@ const VariantsModal = ({ product, onClose }) => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       load();
+      toast.success('Image updated');
     } catch (err) {
-      alert(err.response?.data?.message || 'Image upload failed');
+      toast.error(err.response?.data?.message || 'Image upload failed');
     } finally { setUploadingImg(null); }
   };
 
@@ -307,16 +329,26 @@ export default function InventoryPage() {
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
+    e.target.value = ''; // lets picking the exact same file again re-fire onChange
     if (!file) return;
+    const problem = validateImageFile(file);
+    if (problem) return toast.error(problem);
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+  };
+
+  // Object URLs (from URL.createObjectURL) hold the underlying blob
+  // in memory until explicitly revoked — clearing the preview state
+  // alone doesn't release it.
+  const clearImagePreview = () => {
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setImageFile(null);
   };
 
   const openCreate = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
-    setImageFile(null);
-    setImagePreview(null);
+    clearImagePreview();
     setShowModal(true);
   };
 
@@ -331,8 +363,7 @@ export default function InventoryPage() {
       valuationMethod: p.valuation_method || 'weighted_average',
       taxId: p.tax_id || '',
     });
-    setImageFile(null);
-    setImagePreview(null);
+    clearImagePreview();
     setShowModal(true);
   };
 
@@ -340,12 +371,15 @@ export default function InventoryPage() {
     setShowModal(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
-    setImageFile(null);
-    setImagePreview(null);
+    clearImagePreview();
   };
 
   const handleSubmit = async () => {
     if (!form.name) return alert('Product Name is required');
+    if (imageFile) {
+      const problem = validateImageFile(imageFile);
+      if (problem) return toast.error(problem);
+    }
     setSaving(true);
     try {
       if (editingId) {
@@ -382,13 +416,16 @@ export default function InventoryPage() {
       }
 
       load();
+      toast.success(editingId ? 'Product updated' : 'Product created');
       closeModal();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || `Failed to ${editingId ? 'update' : 'create'} product`);
+      toast.error(err.response?.data?.message || err.message || `Failed to ${editingId ? 'update' : 'create'} product`);
     } finally { setSaving(false); }
   };
 
   const handleProductImageUpload = async (productId, file) => {
+    const problem = validateImageFile(file);
+    if (problem) return toast.error(problem);
     setUploadingImg(productId);
     try {
       const fd = new FormData();
@@ -397,8 +434,9 @@ export default function InventoryPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       load();
+      toast.success('Image updated');
     } catch (err) {
-      alert('Image upload failed');
+      toast.error(err.response?.data?.message || 'Image upload failed');
     } finally { setUploadingImg(null); }
   };
 
