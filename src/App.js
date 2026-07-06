@@ -308,6 +308,18 @@ function AppLayout() {
   const nav = useNavigate();
   const loc = window.location.pathname;
 
+  // Persisted so the sidebar stays collapsed/expanded across page
+  // reloads and navigation, not just within one render.
+  const [collapsed, setCollapsed] = React.useState(
+    () => localStorage.getItem('sidebar_collapsed') === 'true'
+  );
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      localStorage.setItem('sidebar_collapsed', String(!prev));
+      return !prev;
+    });
+  };
+
   // module: checked against the admin-editable permission set (see
   // role.routes.js) — an Admin can grant or revoke any of these per
   // role from Users > Role Permissions, and this list reflects that
@@ -331,16 +343,17 @@ function AppLayout() {
     { path:'/sustainability', label:'Sustainability',    icon:'🌱', module:'sustainability' },
     { path:'/banks',          label:'Banks',             icon:'🏦', module:'banks' },
     { path:'/users',          label:'Users',             icon:'👤', roles:['Admin'] },
-    { path:'/settings',       label:'Settings',          icon:'⚙️' },
+    { path:'/settings',       label:'Settings',          icon:'⚙️', roles:['Admin'] },
   ];
-  // Checked directly against user.roles, NOT via hasRole('Cashier') —
-  // hasRole() treats Admin as implicitly satisfying any role check
-  // (by design, for the common "does this user have permission X"
-  // case), which would make this specific exclusion check true for
-  // Admins too and hide the entire nav for them.
-  const isCashierOnly = user?.roles?.includes('Cashier');
+  // No more hardcoded Cashier exclusion here — Cashier defaults to
+  // zero granted modules (see permissions.js's ROLE_DEFAULT_MODULES),
+  // which already produces an empty nav for it without special-casing
+  // the role by name. That default is exactly what an Admin can now
+  // change from Role Permissions (e.g. granting Cashier access to
+  // Customers/Invoices for a worker who also raises wholesale
+  // invoices) — a hardcoded exclusion here would silently override
+  // that choice and hide items the Admin explicitly turned on.
   const NAV = ALL_NAV.filter(item => {
-    if (isCashierOnly) return false;
     if (item.module) return hasModule(item.module);
     if (item.roles) return item.roles.some(r => hasRole(r));
     return true;
@@ -360,16 +373,32 @@ function AppLayout() {
       fontFamily:'sans-serif', overflow:'hidden' }}>
 
       {/* Sidebar */}
-      <div style={{ width:222, background:'#0d1b2a',
+      <div style={{ width: collapsed ? 68 : 222, background:'#0d1b2a',
         display:'flex', flexDirection:'column',
-        flexShrink:0, overflowY:'auto' }}>
+        flexShrink:0, overflowY:'auto', overflowX:'hidden',
+        position:'relative',
+        transition:'width .18s ease' }}>
+
+        {/* Collapse/expand toggle */}
+        <button onClick={toggleCollapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={{ position:'absolute', top:18, right:-12,
+            width:24, height:24, borderRadius:'50%',
+            border:'1px solid rgba(255,255,255,.15)',
+            background:'#1a2f4a', color:'rgba(255,255,255,.7)',
+            fontSize:12, cursor:'pointer', zIndex:10,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            boxShadow:'0 2px 6px rgba(0,0,0,.3)' }}>
+          {collapsed ? '›' : '‹'}
+        </button>
 
         {/* Brand */}
-        <div style={{ padding:'20px 16px',
+        <div style={{ padding: collapsed ? '20px 0' : '20px 16px',
           borderBottom:'1px solid rgba(255,255,255,.08)',
           flexShrink:0 }}>
           <div style={{ display:'flex',
-            alignItems:'center', gap:10 }}>
+            alignItems:'center', gap:10,
+            justifyContent: collapsed ? 'center' : 'flex-start' }}>
             <div style={{ width:36, height:36,
               borderRadius:10,
               background:'linear-gradient(135deg,#2d84e0,#3d9fff)',
@@ -377,14 +406,16 @@ function AppLayout() {
               justifyContent:'center', fontSize:16,
               fontWeight:800, color:'white',
               flexShrink:0 }}>F</div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700,
-                color:'white' }}>FinSuite Pro</div>
-              <div style={{ fontSize:10,
-                color:'rgba(255,255,255,.4)' }}>
-                Accounting
+            {!collapsed && (
+              <div>
+                <div style={{ fontSize:13, fontWeight:700,
+                  color:'white', whiteSpace:'nowrap' }}>FinSuite Pro</div>
+                <div style={{ fontSize:10,
+                  color:'rgba(255,255,255,.4)', whiteSpace:'nowrap' }}>
+                  Accounting
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -398,8 +429,10 @@ function AppLayout() {
             return (
               <div key={item.path}
                 onClick={() => nav(item.path)}
+                title={collapsed ? item.label : undefined}
                 style={{ display:'flex', alignItems:'center',
-                  gap:10, padding:'9px 16px',
+                  gap:10, padding: collapsed ? '9px 0' : '9px 16px',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
                   cursor:'pointer', fontSize:13,
                   transition:'all .15s',
                   color: active
@@ -415,7 +448,7 @@ function AppLayout() {
                 <span style={{ fontSize:15 }}>
                   {item.icon}
                 </span>
-                <span>{item.label}</span>
+                {!collapsed && <span style={{ whiteSpace:'nowrap' }}>{item.label}</span>}
               </div>
             );
           })}
@@ -427,9 +460,11 @@ function AppLayout() {
           flexShrink:0 }}>
           <div
             onClick={() => { logout(); nav('/login'); }}
+            title={collapsed ? 'Click to sign out' : undefined}
             style={{ display:'flex', alignItems:'center',
               gap:10, padding:'8px', borderRadius:8,
               cursor:'pointer',
+              justifyContent: collapsed ? 'center' : 'flex-start',
               transition:'background .15s' }}>
             <div style={{ width:32, height:32,
               borderRadius:8, flexShrink:0,
@@ -439,20 +474,22 @@ function AppLayout() {
               fontWeight:700, color:'#0d1b2a' }}>
               {initials}
             </div>
-            <div style={{ flex:1, overflow:'hidden' }}>
-              <div style={{ fontSize:12, fontWeight:600,
-                color:'white', overflow:'hidden',
-                textOverflow:'ellipsis',
-                whiteSpace:'nowrap' }}>
-                {user
-                  ? `${user.firstName||user.first_name||''} ${user.lastName||user.last_name||''}`
-                  : 'User'}
+            {!collapsed && (
+              <div style={{ flex:1, overflow:'hidden' }}>
+                <div style={{ fontSize:12, fontWeight:600,
+                  color:'white', overflow:'hidden',
+                  textOverflow:'ellipsis',
+                  whiteSpace:'nowrap' }}>
+                  {user
+                    ? `${user.firstName||user.first_name||''} ${user.lastName||user.last_name||''}`
+                    : 'User'}
+                </div>
+                <div style={{ fontSize:10,
+                  color:'rgba(255,255,255,.4)' }}>
+                  Click to sign out
+                </div>
               </div>
-              <div style={{ fontSize:10,
-                color:'rgba(255,255,255,.4)' }}>
-                Click to sign out
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -527,6 +564,21 @@ function ProtectedRoute({ children }) {
 //    role-name checks, not modules — letting "who can manage users"
 //    itself be reassignable would recreate the self-promotion hole
 //    the RBAC work started by closing.
+// Ordered module -> route map, shared between RoleRoute's fallback
+// and AppLayout's nav — a Cashier granted only Customers/Invoices
+// (no Dashboard) still needs somewhere to land when redirected away
+// from a module they don't have, so the fallback below picks the
+// first one this specific user actually has, not just 'dashboard'.
+const MODULE_ROUTES = [
+  ['dashboard', '/dashboard'], ['invoices', '/invoices'], ['customers', '/customers'],
+  ['bills', '/bills'], ['suppliers', '/suppliers'], ['inventory', '/inventory'],
+  ['quotations', '/quotations'], ['purchase_orders', '/purchase-orders'],
+  ['accounts', '/accounts'], ['journals', '/journals'], ['assets', '/assets'],
+  ['tax', '/tax'], ['payroll', '/payroll'], ['banks', '/banks'],
+  ['projects', '/projects'], ['reports', '/reports'],
+  ['sustainability', '/sustainability'], ['agent', '/agent'],
+];
+
 function RoleRoute({ module, roles, children }) {
   const { isAuthenticated, loading, hasRole, hasModule } = useAuth();
   if (loading) return (
@@ -544,9 +596,33 @@ function RoleRoute({ module, roles, children }) {
   );
   if (!isAuthenticated) return <Navigate to="/login" replace/>;
   const allowed = module ? hasModule(module) : roles.some(r => hasRole(r));
-  return allowed
-    ? children
-    : <Navigate to="/dashboard" replace/>;
+  if (allowed) return children;
+
+  // Redirecting straight to /dashboard broke for anyone without
+  // Dashboard access (Cashier defaults to zero grants, but an Admin
+  // might grant just Customers/Invoices to one without Dashboard) —
+  // /dashboard is itself a RoleRoute, so landing there while denied
+  // bounced right back, rendering as a blank page. Find the first
+  // module this specific user actually has instead of assuming
+  // Dashboard is always it.
+  const fallback = MODULE_ROUTES.find(([m]) => hasModule(m));
+  if (fallback) return <Navigate to={fallback[1]} replace/>;
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+      height:'100vh', fontFamily:'sans-serif', textAlign:'center', padding:20 }}>
+      <div>
+        <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+        <h2 style={{ fontSize:18, fontWeight:700, color:'#1a2740', marginBottom:6 }}>
+          No access to this app
+        </h2>
+        <p style={{ color:'#6b7fa3', fontSize:13, maxWidth:340 }}>
+          Your account doesn't have access to any part of this dashboard.
+          If you're a cashier, sign in on the POS terminal app instead
+          using the same email and password.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function PublicRoute({ children }) {
@@ -638,7 +714,7 @@ export default function App() {
             <Route path="users"
               element={<RoleRoute roles={['Admin']}><UsersPage/></RoleRoute>}/>
             <Route path="settings"
-              element={<SettingsPage/>}/>
+              element={<RoleRoute roles={['Admin']}><SettingsPage/></RoleRoute>}/>
             <Route path="settings/go-live"
               element={<RoleRoute roles={['Admin']}><GoLiveWizard/></RoleRoute>}/>
             <Route path="settings/period-close"

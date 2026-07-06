@@ -119,6 +119,27 @@ export default function SettingsPage() {
     </div>
   );
 
+  // App.js's RoleRoute already redirects a non-Admin away before this
+  // page ever renders — this is a second, cheap layer in case that
+  // route guard is ever bypassed, matching the same pattern used for
+  // UsersPage.js.
+  if (!hasRole('Admin')) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+        height:'65vh', fontFamily:'sans-serif', textAlign:'center' }}>
+        <div>
+          <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+          <h2 style={{ fontSize:18, fontWeight:700, color:'#1a2740', marginBottom:6 }}>
+            Admins only
+          </h2>
+          <p style={{ color:'#6b7fa3', fontSize:13 }}>
+            Settings are restricted to Admin accounts.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ fontFamily:'sans-serif' }}>
 
