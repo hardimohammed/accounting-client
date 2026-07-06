@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-
-// ── Helpers ───────────────────────────────────────────────────
-const fmtCur = (n) => `$${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2
-}).format(n || 0)}`;
+// This page had its own local fmtCur hardcoded to a $ prefix,
+// unlike every other page (which uses this shared, GHS-aware one) —
+// the "Outstanding Total" tile was showing dollars regardless of
+// the org's actual currency.
+import { fmtCur } from '../../hooks/useApi';
 
 // 0 days = pay now/instantly (e.g. a walk-in or cash-basis customer)
 // — same field as the Net-X terms below, just the "pay immediately"
@@ -160,16 +160,16 @@ export default function CustomerListPage() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)',
         gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Customers',   value: customers.length,  color:'#1e6bbd' },
-          { label:'Active',            value: customers.filter(c => c.is_active !== 0).length, color:'#16c79a' },
-          { label:'Outstanding Total', value: fmtCur(customers.reduce((s,c) => s + parseFloat(c.outstanding_balance || 0), 0)), color:'#e8a04a' },
+          { label:'Total Customers',   value: customers.length,  color:'#C8102E' },
+          { label:'Active',            value: customers.filter(c => c.is_active !== 0).length, color:'#D9A521' },
+          { label:'Outstanding Total', value: fmtCur(customers.reduce((s,c) => s + parseFloat(c.outstanding_balance || 0), 0)), color:'#046A38' },
         ].map((s, i) => (
-          <div key={i} style={{ background:'white', borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0', boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3', fontWeight:500, marginBottom:6 }}>
+          <div key={i} style={{ background:s.color, borderRadius:12, padding:16,
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)', fontWeight:500, marginBottom:6 }}>
               {s.label}
             </div>
-            <div style={{ fontSize:22, fontWeight:700, color:s.color }}>
+            <div style={{ fontSize:22, fontWeight:700, color:'white' }}>
               {s.value}
             </div>
           </div>
@@ -242,7 +242,8 @@ export default function CustomerListPage() {
             </thead>
             <tbody>
               {filtered.map((cust, i) => (
-                <tr key={i} style={{ borderBottom:'1px solid #f4f6f9' }}>
+                <tr key={i} style={{ borderBottom:'1px solid #f4f6f9', cursor:'pointer' }}
+                  onClick={() => navigate(`/customers/${cust.id}`)}>
                   <td style={{ padding:'12px 16px', fontFamily:'monospace',
                     fontSize:12, color:'#1e6bbd', fontWeight:600 }}>
                     {cust.customer_code}
@@ -288,7 +289,7 @@ export default function CustomerListPage() {
                   <td style={{ padding:'12px 16px' }}>
                     <Badge status={cust.is_active !== 0 ? 'active' : 'inactive'}/>
                   </td>
-                  <td style={{ padding:'12px 16px' }}>
+                  <td style={{ padding:'12px 16px' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display:'flex', gap:6 }}>
                       <button
                         onClick={() => navigate(`/invoices/new?customerId=${cust.id}`)}

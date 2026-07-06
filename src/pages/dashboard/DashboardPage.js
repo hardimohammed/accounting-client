@@ -71,32 +71,28 @@ export default function DashboardPage() {
       label: 'Total Sales (30 Days)',
       value: fmtCur(d.sales30Days?.totalSales),
       sub:   `${d.sales30Days?.totalInvoices || 0} invoices`,
-      color: '#1e6bbd',
-      bg:    'rgba(30,107,189,.08)',
+      color: '#C8102E',
       icon:  '📈',
     },
     {
       label: 'Cash Balance',
       value: fmtCur(d.cashBalance),
       sub:   'All bank accounts',
-      color: '#16c79a',
-      bg:    'rgba(22,199,154,.08)',
+      color: '#D9A521',
       icon:  '💰',
     },
     {
       label: 'Outstanding Receivables',
       value: fmtCur(d.sales30Days?.outstanding),
       sub:   `Collection rate: ${d.sales30Days?.collectionRate || 0}%`,
-      color: '#e8a04a',
-      bg:    'rgba(232,160,74,.08)',
+      color: '#046A38',
       icon:  '⏳',
     },
     {
       label: 'Overdue Invoices',
       value: fmtCur(d.overdueInvoices?.amount),
       sub:   `${d.overdueInvoices?.count || 0} invoices past due`,
-      color: '#e05c5c',
-      bg:    'rgba(224,92,92,.08)',
+      color: '#1A1A2E',
       icon:  '⚠️',
     },
   ];
@@ -117,21 +113,21 @@ export default function DashboardPage() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)',
         gap:16, marginBottom:24 }}>
         {KPI_CARDS.map((k, i) => (
-          <div key={i} style={{ background:'white', borderRadius:12, padding:20,
-            border:'1px solid #e2e8f0', boxShadow:'0 2px 8px rgba(13,27,42,.05)' }}>
-            <div style={{ width:40, height:40, borderRadius:10, background:k.bg,
+          <div key={i} style={{ background:k.color, borderRadius:12, padding:20,
+            boxShadow:'0 2px 8px rgba(13,27,42,.12)' }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)',
               display:'flex', alignItems:'center', justifyContent:'center',
               fontSize:18, marginBottom:12 }}>
               {k.icon}
             </div>
             <div style={{ fontSize:24, fontWeight:700, fontFamily:'monospace',
-              color:k.color, marginBottom:4, letterSpacing:-1 }}>
+              color:'white', marginBottom:4, letterSpacing:-1 }}>
               {k.value}
             </div>
-            <div style={{ fontSize:12, fontWeight:600, color:'#1a2740', marginBottom:4 }}>
+            <div style={{ fontSize:12, fontWeight:600, color:'rgba(255,255,255,.9)', marginBottom:4 }}>
               {k.label}
             </div>
-            <div style={{ fontSize:11, color:'#6b7fa3' }}>{k.sub}</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.7)' }}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -217,8 +213,10 @@ export default function DashboardPage() {
               const maxRev = topCust[0]?.total_revenue || 1;
               const pct    = Math.round((c.total_revenue / maxRev) * 100);
               return (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:12,
-                  padding:'8px 0', borderBottom: i < topCust.length - 1
+                <div key={i} onClick={() => c.id && navigate(`/customers/${c.id}`)}
+                  style={{ display:'flex', alignItems:'center', gap:12,
+                  padding:'8px 0', cursor: c.id ? 'pointer' : 'default',
+                  borderBottom: i < topCust.length - 1
                     ? '1px solid #f4f6f9' : 'none' }}>
                   <div style={{ width:28, height:28, borderRadius:7,
                     background:`hsl(${200 + i * 20},60%,48%)`,

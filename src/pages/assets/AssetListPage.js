@@ -246,29 +246,28 @@ export default function AssetListPage() {
           { label:'Active Assets',
             value:activeAssets.length,
             note:`of ${assets.length} total`,
-            color:'#1e6bbd' },
+            color:'#C8102E' },
           { label:'Total Cost Basis',
             value:fmtCur(totalCost),
             note:'Acquisition value',
-            color:'#1a2740' },
+            color:'#D9A521' },
           { label:'Net Book Value',
             value:fmtCur(totalBV),
             note:'After depreciation',
-            color:'#16c79a' },
+            color:'#046A38' },
           { label:'Accumulated Depreciation',
             value:fmtCur(totalDep),
             note:'Total written off',
-            color:'#e8a04a' },
+            color:'#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white',
+          <div key={i} style={{ background:s.color,
             borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
             <div style={{ fontSize:18, fontWeight:700,
-              color:s.color }}>{s.value}</div>
-            <div style={{ fontSize:10, color:'#6b7fa3',
+              color:'white' }}>{s.value}</div>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,.65)',
               marginTop:4 }}>{s.note}</div>
           </div>
         ))}

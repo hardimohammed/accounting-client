@@ -39,6 +39,67 @@ import PeriodClosePage  from './pages/settings/PeriodClosePage';
 import PublicInvoicePage from './pages/public/PublicInvoicePage';
 import BankReconciliationPage from './pages/settings/BankReconciliationPage';
 
+// Scattered, low-opacity commerce/industry motifs for the login/
+// register background — sales, markets, stores, factories, the
+// people and goods that move through them. Purely decorative
+// (aria-hidden), positioned to stay clear of the centered card so it
+// never competes with the actual sign-in form.
+const AUTH_BG_MOTIFS = [
+  { icon:'🏭', top:'6%',  left:'5%',  size:64, rot:-12, op:.16 },
+  { icon:'🏪', top:'16%', left:'85%', size:56, rot:8,   op:.15 },
+  { icon:'🛒', top:'70%', left:'8%',  size:52, rot:10,  op:.16 },
+  { icon:'📊', top:'82%', left:'80%', size:60, rot:-8,  op:.14 },
+  { icon:'🏬', top:'4%',  left:'45%', size:48, rot:6,   op:.12 },
+  { icon:'📦', top:'40%', left:'2%',  size:46, rot:-6,  op:.14 },
+  { icon:'🤝', top:'55%', left:'90%', size:50, rot:-10, op:.13 },
+  { icon:'💰', top:'88%', left:'40%', size:44, rot:14,  op:.13 },
+  { icon:'🏭', top:'30%', left:'93%', size:42, rot:16,  op:.12 },
+  { icon:'🛍️', top:'92%', left:'62%', size:46, rot:-14, op:.13 },
+  { icon:'🏗️', top:'12%', left:'68%', size:44, rot:9,   op:.11 },
+  { icon:'📈', top:'62%', left:'50%', size:38, rot:-6,  op:.1  },
+];
+
+function AuthBackdrop() {
+  return (
+    <div aria-hidden="true" style={{ position:'absolute', inset:0, overflow:'hidden', zIndex:0 }}>
+      {/* Rich brand gradient, deep navy through blue with a warm
+          gold undertone — evokes dusk over a market/industrial skyline
+          rather than a flat corporate blue. */}
+      <div style={{ position:'absolute', inset:0,
+        background:'linear-gradient(150deg,#0a1626 0%,#123256 38%,#1e6bbd 72%,#2d84e0 100%)' }}/>
+
+      {/* Soft blurred glow blobs for depth — gold, green, red, echoing
+          the app's own palette without being a literal flag. */}
+      <div style={{ position:'absolute', width:520, height:520, borderRadius:'50%',
+        background:'#D9A521', opacity:.22, filter:'blur(110px)', top:'-14%', left:'-10%' }}/>
+      <div style={{ position:'absolute', width:460, height:460, borderRadius:'50%',
+        background:'#046A38', opacity:.22, filter:'blur(120px)', bottom:'-16%', right:'-8%' }}/>
+      <div style={{ position:'absolute', width:360, height:360, borderRadius:'50%',
+        background:'#C8102E', opacity:.16, filter:'blur(100px)', top:'38%', left:'50%',
+        transform:'translateX(-50%)' }}/>
+
+      {/* Fine dot-grid texture for a subtle "at scale" industrial feel */}
+      <div style={{ position:'absolute', inset:0, opacity:.25,
+        backgroundImage:'radial-gradient(rgba(255,255,255,.35) 1px, transparent 1px)',
+        backgroundSize:'26px 26px' }}/>
+
+      {/* Scattered commerce/industry motifs */}
+      {AUTH_BG_MOTIFS.map((m, i) => (
+        <div key={i} style={{ position:'absolute', top:m.top, left:m.left,
+          fontSize:m.size, opacity:m.op, transform:`rotate(${m.rot}deg)`,
+          filter:'grayscale(.15)', userSelect:'none', lineHeight:1 }}>
+          {m.icon}
+        </div>
+      ))}
+
+      {/* Gentle vignette so the card always reads clearly regardless
+          of what's behind it */}
+      <div style={{ position:'absolute', inset:0,
+        background:'radial-gradient(ellipse at center, transparent 35%, rgba(6,14,26,.35) 100%)' }}/>
+    </div>
+  );
+}
+
 // ── Login Page ────────────────────────────────────────────────
 function LoginPage() {
   const { login } = useAuth();
@@ -61,12 +122,13 @@ function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f4f6f9',
+    <div style={{ minHeight:'100vh', position:'relative', overflow:'hidden',
       display:'flex', alignItems:'center',
       justifyContent:'center', fontFamily:'sans-serif' }}>
-      <div style={{ background:'white', borderRadius:14,
+      <AuthBackdrop/>
+      <div style={{ position:'relative', zIndex:1, background:'white', borderRadius:14,
         padding:40, width:400,
-        boxShadow:'0 8px 32px rgba(13,27,42,.12)' }}>
+        boxShadow:'0 24px 60px rgba(6,14,26,.35)' }}>
         <div style={{ textAlign:'center', marginBottom:32 }}>
           <div style={{ width:52, height:52, borderRadius:14,
             background:'linear-gradient(135deg,#2d84e0,#3d9fff)',
@@ -200,13 +262,14 @@ function RegisterPage() {
     fontWeight:600, color:'#1a2740', marginBottom:6 };
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f4f6f9',
+    <div style={{ minHeight:'100vh', position:'relative', overflow:'hidden',
       display:'flex', alignItems:'center',
       justifyContent:'center', fontFamily:'sans-serif',
       padding:20 }}>
-      <div style={{ background:'white', borderRadius:14,
+      <AuthBackdrop/>
+      <div style={{ position:'relative', zIndex:1, background:'white', borderRadius:14,
         padding:40, width:'100%', maxWidth:480,
-        boxShadow:'0 8px 32px rgba(13,27,42,.12)' }}>
+        boxShadow:'0 24px 60px rgba(6,14,26,.35)' }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <div style={{ width:44, height:44, borderRadius:11,
             background:'linear-gradient(135deg,#2d84e0,#3d9fff)',

@@ -70,20 +70,25 @@ export default function PurchaseOrderListPage() {
   });
   const [lines, setLines] = useState([emptyLine()]);
 
+  // allSettled — an Admin can customize any role to have some of
+  // these four but not others (e.g. purchase_orders without
+  // inventory), and one denied/failed call used to sink the whole
+  // Promise.all, leaving this entire page blank instead of just
+  // missing that one reference list.
   const load = () => {
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       api.get('/purchase-orders'),
       api.get('/suppliers'),
       api.get('/inventory'),
-      api.get('/tax/types').catch(() => ({ data:[] })),
+      api.get('/tax/types'),
     ]).then(([p, s, i, tt]) => {
-      setPos(p.data || []);
-      setSuppliers(s.data || []);
-      setProducts(i.data || []);
-      setTaxTypes(tt.data || []);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
+      if (p.status === 'fulfilled')  setPos(p.value.data || []);
+      if (s.status === 'fulfilled')  setSuppliers(s.value.data || []);
+      if (i.status === 'fulfilled')  setProducts(i.value.data || []);
+      if (tt.status === 'fulfilled') setTaxTypes(tt.value.data || []);
+      [p, s, i, tt].forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);

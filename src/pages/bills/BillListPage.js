@@ -160,19 +160,19 @@ export default function BillListPage() {
         gridTemplateColumns:'repeat(4,1fr)',
         gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Bills',    value:fmtCur(totalBills),       color:'#1e6bbd' },
-          { label:'Total Paid',     value:fmtCur(totalPaid),        color:'#16c79a' },
-          { label:'Outstanding',    value:fmtCur(totalOutstanding), color:'#e8a04a' },
+          { label:'Total Bills',    value:fmtCur(totalBills),       color:'#C8102E' },
+          { label:'Total Paid',     value:fmtCur(totalPaid),        color:'#D9A521' },
+          { label:'Outstanding',    value:fmtCur(totalOutstanding), color:'#046A38' },
           { label:'Overdue Bills',
             value:totalOverdue,
-            color:'#e05c5c' },
+            color:'#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white', borderRadius:12,
-            padding:16, border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+          <div key={i} style={{ background:s.color, borderRadius:12,
+            padding:16,
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
-            <div style={{ fontSize:18, fontWeight:700, color:s.color }}>
+            <div style={{ fontSize:18, fontWeight:700, color:'white' }}>
               {s.value}
             </div>
           </div>

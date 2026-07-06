@@ -93,15 +93,15 @@ export default function CustomerDetailPage() {
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Billed', value: fmtCur(totals.billed, 'GHS'), color: '#1e6bbd' },
-          { label: 'Total Paid', value: fmtCur(totals.paid, 'GHS'), color: '#16c79a' },
-          { label: 'Outstanding', value: fmtCur(totals.balance, 'GHS'), color: '#e8a04a' },
-          { label: 'Transactions', value: `${totals.posCount + totals.wholesaleCount} (${totals.posCount} POS · ${totals.wholesaleCount} wholesale)`, color: '#7c3aed', small: true },
+          { label: 'Total Billed', value: fmtCur(totals.billed, 'GHS'), color: '#C8102E' },
+          { label: 'Total Paid', value: fmtCur(totals.paid, 'GHS'), color: '#D9A521' },
+          { label: 'Outstanding', value: fmtCur(totals.balance, 'GHS'), color: '#046A38' },
+          { label: 'Transactions', value: `${totals.posCount + totals.wholesaleCount} (${totals.posCount} POS · ${totals.wholesaleCount} wholesale)`, color: '#1A1A2E', small: true },
         ].map((s, i) => (
-          <div key={i} style={{ background: 'white', borderRadius: 12, padding: 16,
-            border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize: 11, color: '#6b7fa3', marginBottom: 6 }}>{s.label}</div>
-            <div style={{ fontSize: s.small ? 12 : 18, fontWeight: 700, color: s.color }}>{s.value}</div>
+          <div key={i} style={{ background: s.color, borderRadius: 12, padding: 16,
+            boxShadow: '0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>{s.label}</div>
+            <div style={{ fontSize: s.small ? 12 : 18, fontWeight: 700, color: 'white' }}>{s.value}</div>
           </div>
         ))}
       </div>

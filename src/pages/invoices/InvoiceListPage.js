@@ -109,19 +109,19 @@ export default function InvoiceListPage() {
       <div style={{ display: 'grid',
         gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Billed',       value: fmtCur(s.total_billed),      color: '#1e6bbd' },
-          { label: 'Total Collected',    value: fmtCur(s.total_collected),   color: '#16c79a' },
-          { label: 'Outstanding',        value: fmtCur(s.total_outstanding), color: '#e8a04a' },
-          { label: 'Collection Rate',    value: `${s.collection_rate || 0}%`, color: '#7c3aed' },
+          { label: 'Total Billed',       value: fmtCur(s.total_billed),      color: '#C8102E' },
+          { label: 'Total Collected',    value: fmtCur(s.total_collected),   color: '#D9A521' },
+          { label: 'Outstanding',        value: fmtCur(s.total_outstanding), color: '#046A38' },
+          { label: 'Collection Rate',    value: `${s.collection_rate || 0}%`, color: '#1A1A2E' },
         ].map((st, i) => (
-          <div key={i} style={{ background: 'white', borderRadius: 12,
-            padding: 16, border: '1px solid #e2e8f0',
-            boxShadow: '0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize: 11, color: '#6b7fa3',
+          <div key={i} style={{ background: st.color, borderRadius: 12,
+            padding: 16,
+            boxShadow: '0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)',
               fontWeight: 500, marginBottom: 6 }}>
               {st.label}
             </div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: st.color }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>
               {st.value}
             </div>
           </div>

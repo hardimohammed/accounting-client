@@ -267,18 +267,23 @@ export default function InventoryPage() {
   const fileInputRef  = useRef();
   const imgInputRefs  = useRef({});
 
+  // allSettled, not all — a role without tax-module access still has
+  // full inventory access, and one denied/failed call (tax types is
+  // just for the "Add Product" form's tax dropdown) previously
+  // sank the whole Promise.all silently, leaving the entire page
+  // looking empty even though the products themselves loaded fine.
   const load = () => {
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       api.get('/inventory'),
       api.get('/inventory/movements'),
       api.get('/tax/types'),
     ]).then(([p, m, tx]) => {
-      setProducts(p.data || []);
-      setMovements(m.data || []);
-      setTaxTypes(tx.data || []);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
+      if (p.status === 'fulfilled')  setProducts(p.value.data || []);
+      if (m.status === 'fulfilled')  setMovements(m.value.data || []);
+      if (tx.status === 'fulfilled') setTaxTypes(tx.value.data || []);
+      [p, m, tx].forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
@@ -445,26 +450,26 @@ export default function InventoryPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)',
         gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Products',   color: '#1e6bbd',
+          { label: 'Total Products',   color: '#C8102E',
             value: products.length },
-          { label: 'Inventory Value',  color: '#16c79a',
+          { label: 'Inventory Value',  color: '#D9A521',
             value: fmtC(products.reduce((s, p) =>
               s + parseFloat(p.quantity_on_hand || 0)
                 * parseFloat(p.cost_price || 0), 0)) },
-          { label: 'Low Stock Items',  color: '#e8a04a',
+          { label: 'Low Stock Items',  color: '#046A38',
             value: products.filter(p =>
               parseFloat(p.reorder_level) > 0 &&
               parseFloat(p.quantity_on_hand || 0) <= parseFloat(p.reorder_level)
             ).length },
-          { label: 'Product Types',    color: '#7c3aed',
+          { label: 'Product Types',    color: '#1A1A2E',
             value: new Set(products.map(p => p.product_type).filter(Boolean)).size },
         ].map((c, i) => (
-          <div key={i} style={{ background: 'white', borderRadius: 12,
-            padding: 20, border: '1px solid #e2e8f0',
-            boxShadow: '0 2px 8px rgba(13,27,42,.05)' }}>
+          <div key={i} style={{ background: c.color, borderRadius: 12,
+            padding: 20,
+            boxShadow: '0 2px 8px rgba(13,27,42,.12)' }}>
             <div style={{ fontSize: 28, fontWeight: 700,
-              color: c.color, marginBottom: 4 }}>{c.value}</div>
-            <div style={{ fontSize: 13, color: '#6b7fa3' }}>{c.label}</div>
+              color: 'white', marginBottom: 4 }}>{c.value}</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,.8)' }}>{c.label}</div>
           </div>
         ))}
       </div>

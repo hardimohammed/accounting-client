@@ -168,22 +168,21 @@ export default function ProjectListPage() {
         gap:12, marginBottom:20 }}>
         {[
           { label:'Total Projects',
-            value:projects.length, color:'#1e6bbd' },
+            value:projects.length, color:'#C8102E' },
           { label:'Total Budget',
-            value:fmtCur(totalBudget), color:'#1a2740' },
+            value:fmtCur(totalBudget), color:'#D9A521' },
           { label:'Active',
-            value:activeCount, color:'#16c79a' },
+            value:activeCount, color:'#046A38' },
           { label:'Completed',
-            value:completedCount, color:'#6b7fa3' },
+            value:completedCount, color:'#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white',
+          <div key={i} style={{ background:s.color,
             borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
             <div style={{ fontSize:20, fontWeight:700,
-              color:s.color }}>{s.value}</div>
+              color:'white' }}>{s.value}</div>
           </div>
         ))}
       </div>

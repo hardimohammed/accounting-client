@@ -123,16 +123,16 @@ export default function SupplierListPage() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)',
         gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Suppliers', value:suppliers.length,        color:'#1e6bbd' },
-          { label:'Active',          value:suppliers.filter(s=>s.is_active!==0).length, color:'#16c79a' },
-          { label:'Total Payable',   value:fmtCur(suppliers.reduce((s,sup)=>s+parseFloat(sup.outstanding_balance||0),0)), color:'#e8a04a' },
+          { label:'Total Suppliers', value:suppliers.length,        color:'#C8102E' },
+          { label:'Active',          value:suppliers.filter(s=>s.is_active!==0).length, color:'#D9A521' },
+          { label:'Total Payable',   value:fmtCur(suppliers.reduce((s,sup)=>s+parseFloat(sup.outstanding_balance||0),0)), color:'#046A38' },
         ].map((s,i)=>(
-          <div key={i} style={{ background:'white', borderRadius:12,
-            padding:16, border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+          <div key={i} style={{ background:s.color, borderRadius:12,
+            padding:16,
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
-            <div style={{ fontSize:22, fontWeight:700, color:s.color }}>
+            <div style={{ fontSize:22, fontWeight:700, color:'white' }}>
               {s.value}
             </div>
           </div>

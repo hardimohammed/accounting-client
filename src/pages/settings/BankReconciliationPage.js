@@ -223,16 +223,20 @@ export default function BankReconciliationPage() {
           {summary && (
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
               {[
-                { label:'Statement Balance', value: summary.statementBalance !== null ? fmtCur(summary.statementBalance) : '—', color:'#1e6bbd' },
-                { label:'Book Balance', value: fmtCur(summary.bookBalance), color:'#1a2740' },
+                { label:'Statement Balance', value: summary.statementBalance !== null ? fmtCur(summary.statementBalance) : '—', color:'#C8102E' },
+                { label:'Book Balance', value: fmtCur(summary.bookBalance), color:'#D9A521' },
+                // Keeps its warning behavior — this is a real balanced/
+                // unbalanced signal, not just decorative, so it stays red
+                // when something's actually wrong instead of always
+                // showing green regardless of state.
                 { label:'Difference', value: summary.difference !== null ? fmtCur(summary.difference) : '—',
-                  color: summary.difference === null || Math.abs(summary.difference) < 0.01 ? '#16c79a' : '#e05c5c' },
-                { label:'Unreconciled Lines', value: summary.unreconciledStatementLines, color:'#e8a04a' },
+                  color: summary.difference === null || Math.abs(summary.difference) < 0.01 ? '#046A38' : '#e05c5c' },
+                { label:'Unreconciled Lines', value: summary.unreconciledStatementLines, color:'#1A1A2E' },
               ].map((s,i) => (
-                <div key={i} style={{ background:'white', borderRadius:12, padding:16, border:'1px solid #e2e8f0',
-                  boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-                  <div style={{ fontSize:11, color:'#6b7fa3', fontWeight:500, marginBottom:6 }}>{s.label}</div>
-                  <div style={{ fontSize:18, fontWeight:700, color:s.color }}>{s.value}</div>
+                <div key={i} style={{ background:s.color, borderRadius:12, padding:16,
+                  boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,.75)', fontWeight:500, marginBottom:6 }}>{s.label}</div>
+                  <div style={{ fontSize:18, fontWeight:700, color:'white' }}>{s.value}</div>
                 </div>
               ))}
             </div>

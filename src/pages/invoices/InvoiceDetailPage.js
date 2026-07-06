@@ -390,7 +390,10 @@ export default function InvoiceDetailPage() {
         <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7fa3',
             textTransform: 'uppercase', marginBottom: 10 }}>Bill To</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4,
+            color: invoice.customer_id ? '#1e6bbd' : '#1a2740',
+            cursor: invoice.customer_id ? 'pointer' : 'default' }}
+            onClick={() => invoice.customer_id && navigate(`/customers/${invoice.customer_id}`)}>
             {invoice.customer_name || 'Walk-in Customer'}
           </div>
           {invoice.customer_email && (
