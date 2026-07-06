@@ -53,7 +53,38 @@ export const accountsAPI = {
 export const currencyAPI = {
   list:            ()     => api.get('/currencies'),
   getExchangeRates:(params)=> api.get('/currencies/rates', { params }),
+  getLatestRate:   (base, target) => api.get('/currencies/rates/latest', { params: { base, target } }),
   addRate:         (data) => api.post('/currencies/rates', data),
+};
+
+// ── Bank Accounts & Reconciliation ─────────────────────────────
+export const bankAPI = {
+  list:   ()     => api.get('/banks'),
+  getOne: (id)   => api.get(`/banks/${id}`),
+  create: (data) => api.post('/banks', data),
+  update: (id, data) => api.put(`/banks/${id}`, data),
+  importStatementLines: (id, lines) => api.post(`/banks/${id}/statement-lines`, { lines }),
+  getStatementLines:    (id, params) => api.get(`/banks/${id}/statement-lines`, { params }),
+  getUnmatchedJournalLines: (id) => api.get(`/banks/${id}/unmatched-journal-lines`),
+  match:   (id, lineId, journalLineId) => api.post(`/banks/${id}/statement-lines/${lineId}/match`, { journalLineId }),
+  unmatch: (id, lineId) => api.post(`/banks/${id}/statement-lines/${lineId}/unmatch`),
+  getReconciliationSummary: (id) => api.get(`/banks/${id}/reconciliation-summary`),
+};
+
+// ── Receipts (customer payments received) ──────────────────────
+export const receiptAPI = {
+  list:      (params) => api.get('/receipts', { params }),
+  getOne:    (id)     => api.get(`/receipts/${id}`),
+  create:    (data)   => api.post('/receipts', data),
+  allocate:  (id, allocations) => api.post(`/receipts/${id}/allocate`, { allocations }),
+};
+
+// ── Payments (supplier payments sent) ───────────────────────────
+export const paymentAPI = {
+  list:      (params) => api.get('/payments', { params }),
+  getOne:    (id)     => api.get(`/payments/${id}`),
+  create:    (data)   => api.post('/payments', data),
+  allocate:  (id, allocations) => api.post(`/payments/${id}/allocate`, { allocations }),
 };
 
 // ── Journal Entries ───────────────────────────────────────────
@@ -217,31 +248,30 @@ export const projectsAPI = {
 };
 
 // ── Tax ───────────────────────────────────────────────────────
+// Several entries here used to call endpoints that don't exist on
+// the backend (tax.routes.js has no getOne for a single return, no
+// withholding remit action, no capital-allowances module at all, and
+// deadlines are read-only) — trimmed to match what's actually there
+// rather than leave dead calls a future page could wire up and 404
+// against. GET /tax/returns already returns full row detail per
+// return, so no separate getOne is needed for a list-based UI.
 export const taxAPI = {
   types: {
     list:   ()     => api.get('/tax/types'),
     create: (data) => api.post('/tax/types', data),
-    update: (id,d) => api.put(`/tax/types/${id}`, d),
+    update: (id,d) => api.put(`/tax/${id}`, d),
+    remove: (id)   => api.delete(`/tax/${id}`),
   },
   returns: {
     list:   (params) => api.get('/tax/returns', { params }),
-    getOne: (id)     => api.get(`/tax/returns/${id}`),
     create: (data)   => api.post('/tax/returns', data),
     file:   (id)     => api.post(`/tax/returns/${id}/file`),
   },
   wht: {
-    list:   (params) => api.get('/tax/withholding', { params }),
-    remit:  (id)     => api.post(`/tax/withholding/${id}/remit`),
-  },
-  capitalAllowances: {
-    list:      (params) => api.get('/tax/capital-allowances', { params }),
-    calculate: (data)   => api.post('/tax/capital-allowances/calculate', data),
-    claim:     (id)     => api.post(`/tax/capital-allowances/${id}/claim`),
+    list: (params) => api.get('/tax/withholding', { params }),
   },
   deadlines: {
-    list:   (params) => api.get('/tax/deadlines', { params }),
-    create: (data)   => api.post('/tax/deadlines', data),
-    update: (id, d)  => api.put(`/tax/deadlines/${id}`, d),
+    list: (params) => api.get('/tax/deadlines', { params }),
   },
 };
 
