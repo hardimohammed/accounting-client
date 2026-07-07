@@ -1,24 +1,33 @@
 // ============================================================
 //  src/pages/settings/SettingsPage.js
 // ============================================================
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { validateImageFile } from '../../hooks/useApi';
+import toast from 'react-hot-toast';
+
+const API_URL  = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
+const API_BASE = API_URL.replace(/\/api\/v\d+\/?$/, '');
+const DEFAULT_BRAND_COLOR = '#1e6bbd';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, refreshUser } = useAuth();
   const [tab,     setTab]     = useState('organisation');
   const [org,     setOrg]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef();
   const [form,    setForm]    = useState({
-    name:'', legalName:'', taxId:'',
+    name:'', legalName:'', regNumber:'', taxId:'',
     address:'', city:'', country:'',
     phone:'', email:'', baseCurrency:'GHS',
+    brandColor: DEFAULT_BRAND_COLOR,
   });
 
   useEffect(() => {
@@ -29,6 +38,7 @@ export default function SettingsPage() {
         setForm({
           name:         o.name          || '',
           legalName:    o.legal_name    || '',
+          regNumber:    o.reg_number    || '',
           taxId:        o.tax_id        || '',
           address:      o.address       || '',
           city:         o.city          || '',
@@ -36,6 +46,7 @@ export default function SettingsPage() {
           phone:        o.phone         || '',
           email:        o.email         || '',
           baseCurrency: o.base_currency || 'GHS',
+          brandColor:   o.brand_color   || DEFAULT_BRAND_COLOR,
         });
       })
       .catch(console.error)
@@ -68,9 +79,36 @@ export default function SettingsPage() {
       await api.put('/organizations', form);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      // Picks up the new brand color in the sidebar immediately —
+      // without this, it'd only appear after a full page reload since
+      // AppLayout reads it off the AuthContext user object, not
+      // straight from this page's own local state.
+      refreshUser();
     } catch (err) {
-      alert(err.message || 'Failed to save settings');
+      alert(err.response?.data?.message || err.message || 'Failed to save settings');
     } finally { setSaving(false); }
+  };
+
+  const handleLogoSelect = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ''; // lets picking the exact same file again re-fire onChange
+    if (!file) return;
+    const problem = validateImageFile(file, { allowSvg: true });
+    if (problem) return toast.error(problem);
+
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('logo', file);
+      const res = await api.post('/organizations/logo', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setOrg(o => ({ ...o, logo_url: res.data.logoUrl }));
+      toast.success('Logo updated');
+      refreshUser();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Logo upload failed');
+    } finally { setUploadingLogo(false); }
   };
 
   const TABS = [
@@ -224,6 +262,15 @@ export default function SettingsPage() {
               <div style={{ ...g2, marginTop:16 }}>
                 <div>
                   <label style={lbl}>
+                    Business Registration Number
+                  </label>
+                  <input style={inp}
+                    placeholder="e.g. BN-2026-001234"
+                    value={form.regNumber}
+                    onChange={e=>upd('regNumber',e.target.value)}/>
+                </div>
+                <div>
+                  <label style={lbl}>
                     TIN / Tax Identification Number
                   </label>
                   <input style={inp}
@@ -231,6 +278,8 @@ export default function SettingsPage() {
                     value={form.taxId}
                     onChange={e=>upd('taxId',e.target.value)}/>
                 </div>
+              </div>
+              <div style={{ ...g2, marginTop:16 }}>
                 <div>
                   <label style={lbl}>Base Currency</label>
                   <select style={inp}
@@ -246,6 +295,65 @@ export default function SettingsPage() {
                     marginTop:4 }}>
                     ⚠ Changing base currency affects
                     all reports
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Branding — logo + primary accent color, applied to the
+              sidebar and other key brand touchpoints across the app */}
+          <div style={card}>
+            <div style={cardHead}>Branding</div>
+            <div style={cardBody}>
+              <div style={g2}>
+                <div>
+                  <label style={lbl}>Company Logo</label>
+                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                    <div onClick={() => logoInputRef.current?.click()}
+                      style={{ width:64, height:64, borderRadius:12,
+                        border:'2px dashed #e2e8f0', cursor:'pointer',
+                        overflow:'hidden', flexShrink:0,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        background:'#f8fafc' }}>
+                      {org?.logo_url ? (
+                        <img src={`${API_BASE}${org.logo_url}?token=${localStorage.getItem('accessToken')}`}
+                          alt="Logo" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                      ) : (
+                        <span style={{ fontSize:22 }}>🖼️</span>
+                      )}
+                    </div>
+                    <div>
+                      <button type="button" onClick={() => logoInputRef.current?.click()}
+                        disabled={uploadingLogo}
+                        style={{ padding:'8px 16px', borderRadius:8,
+                          border:'1px solid #e2e8f0', background:'white',
+                          color:'#1a2740', fontSize:12, fontWeight:600,
+                          cursor: uploadingLogo ? 'not-allowed' : 'pointer' }}>
+                        {uploadingLogo ? 'Uploading…' : org?.logo_url ? 'Change logo' : 'Upload logo'}
+                      </button>
+                      <p style={{ fontSize:10, color:'#6b7fa3', marginTop:6 }}>
+                        JPG, PNG, WEBP, GIF or SVG — max 5MB
+                      </p>
+                    </div>
+                    <input ref={logoInputRef} type="file" accept="image/*"
+                      style={{ display:'none' }} onChange={handleLogoSelect}/>
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>Brand Color</label>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <input type="color" value={form.brandColor}
+                      onChange={e=>upd('brandColor', e.target.value)}
+                      style={{ width:44, height:38, padding:2, border:'1.5px solid #e2e8f0',
+                        borderRadius:8, cursor:'pointer', background:'#f9fafb' }}/>
+                    <input style={{ ...inp, fontFamily:'monospace' }}
+                      value={form.brandColor}
+                      onChange={e=>upd('brandColor', e.target.value)}
+                      placeholder="#1e6bbd"/>
+                  </div>
+                  <p style={{ fontSize:10, color:'#6b7fa3', marginTop:6 }}>
+                    Used for the sidebar and your logo badge — saved with the rest of this form
                   </p>
                 </div>
               </div>

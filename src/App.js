@@ -365,11 +365,43 @@ function RegisterPage() {
   );
 }
 
+// Same convention as InventoryPage.js's ProductImage — static
+// /uploads files are served from the API root, not the /api/v1 base.
+const API_URL  = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
+const API_BASE = API_URL.replace(/\/api\/v\d+\/?$/, '');
+
+// Small hex-color helpers for tenant branding (sidebar accent) — no
+// need for a color library for two simple transforms: a translucent
+// tint for backgrounds, and a lightened variant to fake a gradient
+// partner for the brand color the same way the original hardcoded
+// #2d84e0->#3d9fff gradient did.
+const hexToRgba = (hex, alpha) => {
+  const m = (hex || '').replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return `rgba(30,107,189,${alpha})`;
+  const [, r, g, b] = m;
+  return `rgba(${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)},${alpha})`;
+};
+const lightenHex = (hex, amount) => {
+  const m = (hex || '').replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return hex;
+  const [, r, g, b] = m;
+  const clamp = (n) => Math.max(0, Math.min(255, n));
+  return '#' + [r, g, b]
+    .map(x => clamp(parseInt(x, 16) + amount).toString(16).padStart(2, '0'))
+    .join('');
+};
+
 // ── App Layout ────────────────────────────────────────────────
 function AppLayout() {
   const { user, logout, hasRole, hasModule } = useAuth();
   const nav = useNavigate();
   const loc = window.location.pathname;
+
+  // Falls back to the original hardcoded blue when an org hasn't set
+  // a brand color yet, so every existing tenant looks exactly the
+  // same as before this feature existed.
+  const brandColor = /^#[0-9a-f]{6}$/i.test(user?.brandColor || '') ? user.brandColor : '#1e6bbd';
+  const brandColorLight = lightenHex(brandColor, 40);
 
   // Persisted so the sidebar stays collapsed/expanded across page
   // reloads and navigation, not just within one render.
@@ -462,13 +494,20 @@ function AppLayout() {
           <div style={{ display:'flex',
             alignItems:'center', gap:10,
             justifyContent: collapsed ? 'center' : 'flex-start' }}>
-            <div style={{ width:36, height:36,
-              borderRadius:10,
-              background:'linear-gradient(135deg,#2d84e0,#3d9fff)',
-              display:'flex', alignItems:'center',
-              justifyContent:'center', fontSize:16,
-              fontWeight:800, color:'white',
-              flexShrink:0 }}>F</div>
+            {user?.logoUrl ? (
+              <img src={`${API_BASE}${user.logoUrl}?token=${localStorage.getItem('accessToken')}`}
+                alt="" onError={e => { e.target.style.display = 'none'; }}
+                style={{ width:36, height:36, borderRadius:10,
+                  objectFit:'cover', flexShrink:0, background:'white' }}/>
+            ) : (
+              <div style={{ width:36, height:36,
+                borderRadius:10,
+                background:`linear-gradient(135deg,${brandColor},${brandColorLight})`,
+                display:'flex', alignItems:'center',
+                justifyContent:'center', fontSize:16,
+                fontWeight:800, color:'white',
+                flexShrink:0 }}>F</div>
+            )}
             {!collapsed && (
               <div>
                 <div style={{ fontSize:13, fontWeight:700,
@@ -502,10 +541,10 @@ function AppLayout() {
                     ? 'white'
                     : 'rgba(255,255,255,.55)',
                   background: active
-                    ? 'rgba(45,132,224,.2)'
+                    ? hexToRgba(brandColor, .2)
                     : 'transparent',
                   borderRight: active
-                    ? '3px solid #3d9fff'
+                    ? `3px solid ${brandColorLight}`
                     : '3px solid transparent',
                   fontWeight: active ? 600 : 400 }}>
                 <span style={{ fontSize:15 }}>

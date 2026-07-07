@@ -2,27 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
+import { validateImageFile } from '../../hooks/useApi';
 
 const fmt  = (n) => Number(n || 0).toLocaleString('en-GH', {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
 const fmtC = (n) => `GHS ${fmt(n)}`;
-
-// Mirrors the backend's own limits (inventory.routes.js's multer
-// config) — catching an oversized or wrong-type file here means an
-// immediate, specific message instead of a round trip that fails
-// with the same error the server would have thrown anyway.
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const validateImageFile = (file) => {
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return 'Only JPG, PNG, WEBP or GIF images are allowed';
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return `Image is too large (${(file.size / (1024*1024)).toFixed(1)}MB) — max 5MB`;
-  }
-  return null;
-};
 
 // REACT_APP_API_URL points at the /api/v1 base used by axios calls;
 // static /uploads files are served from the API root, so strip the
