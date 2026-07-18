@@ -3,7 +3,6 @@
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import jsPDF from 'jspdf';
 import { invoicesAPI, orgAPI } from '../../api/services';
 import { fmtCur, fmtDate } from '../../hooks/useApi';
 import toast from 'react-hot-toast';
@@ -172,8 +171,13 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!invoice) return;
+    // jsPDF statically pulls in html2canvas (used only for its .html()
+    // rendering path, which this text-only invoice never calls) — dead
+    // weight in the main bundle for every page load. Loaded on demand,
+    // only once someone actually clicks Download PDF.
+    const { default: jsPDF } = await import('jspdf');
     const cur = invoice.currency || 'GHS';
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const left = 40;

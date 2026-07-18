@@ -3,7 +3,6 @@
 //  Ghana-compliant payroll: employees, payroll runs, leave.
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
-import jsPDF from 'jspdf';
 import { payrollAPI, orgAPI } from '../../api/services';
 import toast from 'react-hot-toast';
 
@@ -183,7 +182,12 @@ export default function PayrollPage() {
     } finally { setPosting(false); }
   };
 
-  const handlePayslipPdf = (item) => {
+  const handlePayslipPdf = async (item) => {
+    // jsPDF statically pulls in html2canvas (used only for its .html()
+    // rendering path, which none of this page's text-only PDFs call) —
+    // dead weight in the main bundle for every page load. Loaded on
+    // demand, only once someone actually generates a PDF.
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const left = 40, right = 555;
     let y = 50;
@@ -239,6 +243,7 @@ export default function PayrollPage() {
     try {
       const res = await payrollAPI.runs.payeReport(showRunDetail);
       const { run, items } = res.data;
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       const left = 40, right = 555;
       let y = 50;
@@ -281,6 +286,7 @@ export default function PayrollPage() {
     try {
       const res = await payrollAPI.runs.ssnitReport(showRunDetail);
       const { run, items } = res.data;
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       const left = 40, right = 555;
       let y = 50;

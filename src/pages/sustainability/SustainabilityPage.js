@@ -3,7 +3,6 @@
 //  Full ESG + SDG mapping system
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
-import jsPDF from 'jspdf';
 import api from '../../api/client';
 import { orgAPI } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
@@ -172,10 +171,15 @@ export default function SustainabilityPage() {
     } finally { setVerifying(null); }
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     if (!sdgImpact) return;
     setExporting(true);
     try {
+      // jsPDF statically pulls in html2canvas (used only for its .html()
+      // rendering path, which this text-only report never calls) — dead
+      // weight in the main bundle for every page load. Loaded on demand,
+      // only once someone actually clicks Export.
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       const left = 40, right = 555, pageBottom = 780;
       let y = 50;
