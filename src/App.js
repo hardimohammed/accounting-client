@@ -1,44 +1,50 @@
 // ============================================================
 //  src/App.js — Complete App with all real pages wired
 // ============================================================
-import React from 'react';
-import JournalListPage from './pages/accounts/JournalListPage';
-import JournalFormPage from './pages/accounts/JournalFormPage';
-import JournalDetailPage from './pages/accounts/JournalDetailPage';
-import SustainabilityPage from './pages/sustainability/SustainabilityPage';
-import UsersPage          from './pages/users/UsersPage';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route,
          Navigate, useNavigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// ── Real Pages ────────────────────────────────────────────────
-import DashboardPage    from './pages/dashboard/DashboardPage';
-import CustomerListPage from './pages/customers/CustomerListPage';
-import CustomerDetailPage from './pages/customers/CustomerDetailPage';
-import InvoiceListPage  from './pages/invoices/InvoiceListPage';
-import InvoiceFormPage  from './pages/invoices/InvoiceFormPage';
-import InvoiceDetailPage from './pages/invoices/InvoiceDetailPage';
-import SupplierListPage from './pages/suppliers/SupplierListPage';
-import BillListPage     from './pages/bills/BillListPage';
-import BillFormPage     from './pages/bills/BillFormPage';
-import AccountListPage  from './pages/accounts/AccountListPage';
-import ReportsPage      from './pages/reports/ReportsPage';
-import AssetListPage    from './pages/assets/AssetListPage';
-import AssetFormPage    from './pages/assets/AssetFormPage';
-import InventoryPage    from './pages/inventory/InventoryPage';
-import ProjectListPage  from './pages/projects/ProjectListPage';
-import ProjectDetailPage from './pages/projects/ProjectDetailPage';
-import QuotationListPage from './pages/sales/QuotationListPage';
-import PurchaseOrderPage from './pages/purchasing/PurchaseOrderListPage';
-import TaxDashboardPage from './pages/tax/TaxDashboardPage';
-import PayrollPage      from './pages/payroll/PayrollPage';
-import AgentPage        from './pages/agent/AgentPage';
-import SettingsPage     from './pages/settings/SettingsPage';
-import GoLiveWizard     from './pages/settings/GoLiveWizard';
-import PeriodClosePage  from './pages/settings/PeriodClosePage';
-import PublicInvoicePage from './pages/public/PublicInvoicePage';
-import BankReconciliationPage from './pages/settings/BankReconciliationPage';
+// ── Pages — lazy-loaded per route ───────────────────────────────
+// Every one of these used to be a static import, so a first-time
+// visitor downloaded every module's code (invoices, payroll, tax,
+// sustainability, everything) before the dashboard could even render,
+// regardless of which pages they'd actually use that session. Only
+// LoginPage/RegisterPage/AppLayout stay eager below — they're the app
+// shell, needed immediately, and already live in this same file.
+const JournalListPage = lazy(() => import('./pages/accounts/JournalListPage'));
+const JournalFormPage = lazy(() => import('./pages/accounts/JournalFormPage'));
+const JournalDetailPage = lazy(() => import('./pages/accounts/JournalDetailPage'));
+const SustainabilityPage = lazy(() => import('./pages/sustainability/SustainabilityPage'));
+const UsersPage          = lazy(() => import('./pages/users/UsersPage'));
+const DashboardPage    = lazy(() => import('./pages/dashboard/DashboardPage'));
+const CustomerListPage = lazy(() => import('./pages/customers/CustomerListPage'));
+const CustomerDetailPage = lazy(() => import('./pages/customers/CustomerDetailPage'));
+const InvoiceListPage  = lazy(() => import('./pages/invoices/InvoiceListPage'));
+const InvoiceFormPage  = lazy(() => import('./pages/invoices/InvoiceFormPage'));
+const InvoiceDetailPage = lazy(() => import('./pages/invoices/InvoiceDetailPage'));
+const SupplierListPage = lazy(() => import('./pages/suppliers/SupplierListPage'));
+const BillListPage     = lazy(() => import('./pages/bills/BillListPage'));
+const BillFormPage     = lazy(() => import('./pages/bills/BillFormPage'));
+const AccountListPage  = lazy(() => import('./pages/accounts/AccountListPage'));
+const ReportsPage      = lazy(() => import('./pages/reports/ReportsPage'));
+const AssetListPage    = lazy(() => import('./pages/assets/AssetListPage'));
+const AssetFormPage    = lazy(() => import('./pages/assets/AssetFormPage'));
+const InventoryPage    = lazy(() => import('./pages/inventory/InventoryPage'));
+const ProjectListPage  = lazy(() => import('./pages/projects/ProjectListPage'));
+const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
+const QuotationListPage = lazy(() => import('./pages/sales/QuotationListPage'));
+const PurchaseOrderPage = lazy(() => import('./pages/purchasing/PurchaseOrderListPage'));
+const TaxDashboardPage = lazy(() => import('./pages/tax/TaxDashboardPage'));
+const PayrollPage      = lazy(() => import('./pages/payroll/PayrollPage'));
+const AgentPage        = lazy(() => import('./pages/agent/AgentPage'));
+const SettingsPage     = lazy(() => import('./pages/settings/SettingsPage'));
+const GoLiveWizard     = lazy(() => import('./pages/settings/GoLiveWizard'));
+const PeriodClosePage  = lazy(() => import('./pages/settings/PeriodClosePage'));
+const PublicInvoicePage = lazy(() => import('./pages/public/PublicInvoicePage'));
+const BankReconciliationPage = lazy(() => import('./pages/settings/BankReconciliationPage'));
 
 // Scattered, low-opacity commerce/industry motifs for the login/
 // register background — sales, markets, stores, factories, the
@@ -621,17 +627,22 @@ function AppLayout() {
         {/* Page content */}
         <div style={{ flex:1, overflowY:'auto',
           padding:24, background:'#f4f6f9' }}>
-          <Outlet/>
+          <Suspense fallback={<PageLoading/>}>
+            <Outlet/>
+          </Suspense>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Route Guards ──────────────────────────────────────────────
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
-  if (loading) return (
+// ── Loading states ───────────────────────────────────────────
+// Full-viewport spinner — auth-state resolution (ProtectedRoute/
+// RoleRoute) and the outer route-level Suspense (top-level lazy
+// routes like PublicInvoicePage, before AppLayout has even mounted)
+// both need the whole screen, not just a content pane.
+function FullPageLoading() {
+  return (
     <div style={{ display:'flex', alignItems:'center',
       justifyContent:'center', height:'100vh',
       fontFamily:'sans-serif', color:'#6b7fa3',
@@ -644,6 +655,36 @@ function ProtectedRoute({ children }) {
       <p style={{ fontSize:13 }}>Loading...</p>
     </div>
   );
+}
+
+// Same spinner, sized for AppLayout's content pane rather than the
+// whole viewport — used for in-app navigation between lazy routes, so
+// the sidebar/header stay mounted and only the content area shows a
+// loading state (see AppLayout's <Outlet/> below).
+function PageLoading() {
+  return (
+    <div style={{ display:'flex', alignItems:'center',
+      justifyContent:'center', height:'100%', minHeight:300,
+      fontFamily:'sans-serif', color:'#6b7fa3' }}>
+      <div style={{ width:28, height:28,
+        border:'3px solid #e2e8f0',
+        borderTopColor:'#1e6bbd', borderRadius:'50%',
+        animation:'spin .7s linear infinite' }}/>
+      {/* Duplicated from FullPageLoading rather than shared — this
+          <style> tag is removed from the DOM whenever its owning
+          component unmounts, and these two loading states don't
+          reliably mount/unmount in a fixed order relative to each
+          other, so each needs its own copy to guarantee the keyframe
+          exists whichever one shows first. */}
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
+// ── Route Guards ──────────────────────────────────────────────
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return <FullPageLoading/>;
   return isAuthenticated
     ? children
     : <Navigate to="/login" replace/>;
@@ -684,19 +725,7 @@ const MODULE_ROUTES = [
 
 function RoleRoute({ module, roles, children }) {
   const { isAuthenticated, loading, hasRole, hasModule } = useAuth();
-  if (loading) return (
-    <div style={{ display:'flex', alignItems:'center',
-      justifyContent:'center', height:'100vh',
-      fontFamily:'sans-serif', color:'#6b7fa3',
-      flexDirection:'column', gap:16 }}>
-      <div style={{ width:32, height:32,
-        border:'3px solid #e2e8f0',
-        borderTopColor:'#1e6bbd', borderRadius:'50%',
-        animation:'spin .7s linear infinite' }}/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <p style={{ fontSize:13 }}>Loading...</p>
-    </div>
-  );
+  if (loading) return <FullPageLoading/>;
   if (!isAuthenticated) return <Navigate to="/login" replace/>;
   const allowed = module ? hasModule(module) : roles.some(r => hasRole(r));
   if (allowed) return children;
@@ -744,6 +773,12 @@ export default function App() {
           style:{ fontFamily:'sans-serif',
             fontSize:13, borderRadius:8 },
         }}/>
+        {/* Covers lazy top-level routes (just PublicInvoicePage —
+            LoginPage/RegisterPage/AppLayout are eager, so this rarely
+            triggers). In-app navigation is covered separately by the
+            Suspense around AppLayout's <Outlet/> above, so the
+            sidebar/header don't disappear on every route change. */}
+        <Suspense fallback={<FullPageLoading/>}>
         <Routes>
           {/* Public */}
           <Route path="/login"
@@ -828,6 +863,7 @@ export default function App() {
               element={<Navigate to="/dashboard" replace/>}/>
           </Route>
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );
