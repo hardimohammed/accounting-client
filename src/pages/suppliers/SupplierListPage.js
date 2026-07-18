@@ -5,6 +5,18 @@ import api from '../../api/client';
 const fmtCur = (n) => `GHS ${new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2 }).format(n || 0)}`;
 
+// 0 days = pay now/instantly, same field as the Net-X terms below,
+// just the "pay immediately" end of that same range.
+const PAYMENT_TERMS_OPTIONS = [
+  { days: 0,  label: 'Due on Receipt (pay instantly)' },
+  { days: 7,  label: 'Net 7 — due in 7 days' },
+  { days: 15, label: 'Net 15 — due in 15 days' },
+  { days: 30, label: 'Net 30 — due in 30 days' },
+  { days: 45, label: 'Net 45 — due in 45 days' },
+  { days: 60, label: 'Net 60 — due in 60 days' },
+  { days: 90, label: 'Net 90 — due in 90 days' },
+];
+
 function Modal({ open, onClose, title, children }) {
   if (!open) return null;
   return (
@@ -38,7 +50,7 @@ export default function SupplierListPage() {
   const [modal,     setModal]     = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [form, setForm] = useState({
-    supplierCode:'', name:'', email:'', phone:'',
+    name:'', email:'', phone:'',
     address:'', city:'', country:'', taxId:'',
     paymentTerms:30, currency:'GHS',
     bankName:'', bankAccount:'',
@@ -57,14 +69,15 @@ export default function SupplierListPage() {
   const upd = (f, v) => setForm(p => ({ ...p, [f]: v }));
 
   const handleCreate = async () => {
-    if (!form.supplierCode) return alert('Supplier Code is required');
-    if (!form.name)         return alert('Supplier Name is required');
+    if (!form.name) return alert('Supplier Name is required');
     setSaving(true);
     try {
+      // supplierCode is not sent — the backend auto-generates one
+      // (SUP-001, SUP-002, ...) from the row's own id.
       await api.post('/suppliers', form);
       load();
       setModal(false);
-      setForm({ supplierCode:'', name:'', email:'', phone:'',
+      setForm({ name:'', email:'', phone:'',
         address:'', city:'', country:'', taxId:'',
         paymentTerms:30, currency:'GHS',
         bankName:'', bankAccount:'' });
@@ -110,16 +123,16 @@ export default function SupplierListPage() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)',
         gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Suppliers', value:suppliers.length,        color:'#1e6bbd' },
-          { label:'Active',          value:suppliers.filter(s=>s.is_active!==0).length, color:'#16c79a' },
-          { label:'Total Payable',   value:fmtCur(suppliers.reduce((s,sup)=>s+parseFloat(sup.outstanding_balance||0),0)), color:'#e8a04a' },
+          { label:'Total Suppliers', value:suppliers.length,        color:'#C8102E' },
+          { label:'Active',          value:suppliers.filter(s=>s.is_active!==0).length, color:'#D9A521' },
+          { label:'Total Payable',   value:fmtCur(suppliers.reduce((s,sup)=>s+parseFloat(sup.outstanding_balance||0),0)), color:'#046A38' },
         ].map((s,i)=>(
-          <div key={i} style={{ background:'white', borderRadius:12,
-            padding:16, border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+          <div key={i} style={{ background:s.color, borderRadius:12,
+            padding:16,
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
-            <div style={{ fontSize:22, fontWeight:700, color:s.color }}>
+            <div style={{ fontSize:22, fontWeight:700, color:'white' }}>
               {s.value}
             </div>
           </div>
@@ -223,7 +236,9 @@ export default function SupplierListPage() {
                     {sup.country||'—'}
                   </td>
                   <td style={{ padding:'12px 16px', color:'#6b7fa3', fontSize:13 }}>
-                    {sup.payment_terms} days
+                    {parseInt(sup.payment_terms) === 0
+                      ? 'Due on Receipt'
+                      : `Net ${sup.payment_terms}`}
                   </td>
                   <td style={{ padding:'12px 16px' }}>
                     <span style={{ padding:'3px 10px', borderRadius:20,
@@ -255,23 +270,22 @@ export default function SupplierListPage() {
       <Modal open={modal} onClose={()=>setModal(false)} title="New Supplier">
         <div>
           <div style={g2}>
-            <div><label style={lbl}>Supplier Code *</label>
-              <input style={inp} placeholder="e.g. SUP-001"
-                value={form.supplierCode}
-                onChange={e=>upd('supplierCode',e.target.value)}/></div>
             <div><label style={lbl}>Supplier Name *</label>
               <input style={inp} placeholder="Company name"
                 value={form.name}
                 onChange={e=>upd('name',e.target.value)}/></div>
-          </div>
-          <div style={{ ...g2, marginTop:14 }}>
             <div><label style={lbl}>Email</label>
               <input style={inp} type="email"
                 value={form.email}
                 onChange={e=>upd('email',e.target.value)}/></div>
+          </div>
+          <div style={{ ...g2, marginTop:14 }}>
             <div><label style={lbl}>Phone</label>
               <input style={inp} value={form.phone}
                 onChange={e=>upd('phone',e.target.value)}/></div>
+            <div><label style={lbl}>Tax ID / TIN</label>
+              <input style={inp} value={form.taxId}
+                onChange={e=>upd('taxId',e.target.value)}/></div>
           </div>
           <div style={{ ...g2, marginTop:14 }}>
             <div><label style={lbl}>City</label>
@@ -281,13 +295,14 @@ export default function SupplierListPage() {
               <input style={inp} value={form.country}
                 onChange={e=>upd('country',e.target.value)}/></div>
           </div>
-          <div style={{ ...g2, marginTop:14 }}>
-            <div><label style={lbl}>Tax ID / TIN</label>
-              <input style={inp} value={form.taxId}
-                onChange={e=>upd('taxId',e.target.value)}/></div>
-            <div><label style={lbl}>Payment Terms (days)</label>
-              <input style={inp} type="number" value={form.paymentTerms}
-                onChange={e=>upd('paymentTerms',parseInt(e.target.value)||30)}/></div>
+          <div style={{ marginTop:14 }}>
+            <label style={lbl}>Payment Terms</label>
+            <select style={inp} value={form.paymentTerms}
+              onChange={e=>upd('paymentTerms',parseInt(e.target.value))}>
+              {PAYMENT_TERMS_OPTIONS.map(o => (
+                <option key={o.days} value={o.days}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div style={{ ...g2, marginTop:14 }}>
             <div><label style={lbl}>Bank Name</label>

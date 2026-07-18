@@ -32,13 +32,24 @@ export default function InvoiceDetailPage() {
   const [paystackAmount, setPaystackAmount] = useState('');
   const [generatingLink, setGeneratingLink] = useState(false);
   const [paymentLink, setPaymentLink] = useState(null);
+  const [showShareLink, setShowShareLink] = useState(false);
+  const [shareLink, setShareLink] = useState(null);
+  const [generatingShareLink, setGeneratingShareLink] = useState(false);
+  const [emailingInvoice, setEmailingInvoice] = useState(false);
+  const [payments, setPayments] = useState([]);
+  const [verifyingId, setVerifyingId] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([invoicesAPI.getOne(id), orgAPI.get().catch(() => ({ data: null }))])
-      .then(([invRes, orgRes]) => {
+    Promise.all([
+      invoicesAPI.getOne(id),
+      orgAPI.get().catch(() => ({ data: null })),
+      invoicesAPI.payments(id).catch(() => ({ data: [] })),
+    ])
+      .then(([invRes, orgRes, payRes]) => {
         setInvoice(invRes.data);
         setOrg(orgRes.data);
+        setPayments(payRes.data || []);
       })
       .catch(() => toast.error('Could not load invoice'))
       .finally(() => setLoading(false));
@@ -100,6 +111,52 @@ export default function InvoiceDetailPage() {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(paymentLink.paymentUrl);
     toast.success('Payment link copied — paste it into WhatsApp or email');
+  };
+
+  // Customer-facing pay page — the customer opens this, reviews the
+  // invoice, and only then hits Paystack (via the branded page in
+  // PublicInvoicePage.js), rather than sharing a raw checkout URL.
+  const openShareLinkModal = async () => {
+    setShowShareLink(true);
+    setShareLink(null);
+    setGeneratingShareLink(true);
+    try {
+      const res = await invoicesAPI.publicLink(id);
+      setShareLink(res.data.publicUrl);
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to generate pay link');
+    } finally { setGeneratingShareLink(false); }
+  };
+
+  const handleCopyShareLink = () => {
+    navigator.clipboard.writeText(shareLink);
+    toast.success('Link copied — paste it into WhatsApp or email');
+  };
+
+  const handleEmailInvoice = async () => {
+    setEmailingInvoice(true);
+    try {
+      const res = await invoicesAPI.sendEmail(id);
+      toast.success(res.message || 'Invoice emailed');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to send email');
+    } finally { setEmailingInvoice(false); }
+  };
+
+  // A pending payment sits waiting on Paystack's webhook to confirm
+  // it — but if that webhook never reaches this server (unreachable
+  // callback URL, or just a missed delivery), it can stay "pending"
+  // forever even though the customer's charge genuinely went through
+  // on Paystack's side. This checks with Paystack directly instead.
+  const handleVerifyPayment = async (paymentId) => {
+    setVerifyingId(paymentId);
+    try {
+      const res = await invoicesAPI.verifyPayment(id, paymentId);
+      toast.success(res.message || 'Checked');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Could not check payment status');
+    } finally { setVerifyingId(null); }
   };
 
   const handleDelete = async () => {
@@ -280,6 +337,20 @@ export default function InvoiceDetailPage() {
                   cursor: busy ? 'not-allowed' : 'pointer' }}>
                 Record Manual Payment
               </button>
+              <button onClick={openShareLinkModal} disabled={busy}
+                style={{ padding: '9px 16px', border: '1px solid #1e6bbd', background: 'white',
+                  color: '#1e6bbd', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                  cursor: busy ? 'not-allowed' : 'pointer' }}>
+                Share Pay Link
+              </button>
+              {invoice.customer_email && (
+                <button onClick={handleEmailInvoice} disabled={busy || emailingInvoice}
+                  style={{ padding: '9px 16px', border: '1px solid #e2e8f0', background: 'white',
+                    color: '#1a2740', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                    cursor: (busy || emailingInvoice) ? 'not-allowed' : 'pointer' }}>
+                  {emailingInvoice ? 'Sending…' : 'Email to Customer'}
+                </button>
+              )}
             </>
           )}
 
@@ -294,12 +365,35 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {/* Draft warning — a draft invoice hasn't touched stock, the GL,
+          or the customer's balance yet; only "Post to GL" below does that. */}
+      {invoice.status === 'draft' && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12,
+          padding: '14px 18px', marginBottom: 20, borderRadius: 10,
+          background: '#fff8e6', border: '1px solid #f0d896' }}>
+          <span style={{ fontSize: 20, lineHeight: 1 }}>⚠️</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#8a6d1a', marginBottom: 3 }}>
+              This invoice is still a draft
+            </div>
+            <div style={{ fontSize: 12.5, color: '#8a6d1a', lineHeight: 1.5 }}>
+              It hasn't affected inventory stock, the General Ledger, or the customer's
+              balance yet. Click <strong>Post to GL</strong> below to deduct stock and record
+              the accounting entries — until then, this invoice has no financial effect.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Customer + dates */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
         <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7fa3',
             textTransform: 'uppercase', marginBottom: 10 }}>Bill To</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4,
+            color: invoice.customer_id ? '#1e6bbd' : '#1a2740',
+            cursor: invoice.customer_id ? 'pointer' : 'default' }}
+            onClick={() => invoice.customer_id && navigate(`/customers/${invoice.customer_id}`)}>
             {invoice.customer_name || 'Walk-in Customer'}
           </div>
           {invoice.customer_email && (
@@ -402,6 +496,66 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {payments.length > 0 && (
+        <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12,
+          padding: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2740', marginBottom: 14 }}>
+            Payment History
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                {['Date', 'Method', 'Amount', 'Status', ''].map(h => (
+                  <th key={h} style={{ padding: '8px 10px',
+                    textAlign: h === 'Method' || h === 'Date' ? 'left' : 'right',
+                    fontSize: 10, fontWeight: 600, color: '#6b7fa3',
+                    textTransform: 'uppercase', letterSpacing: .5,
+                    borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map(p => (
+                <tr key={p.id} style={{ borderBottom: '1px solid #f4f6f9' }}>
+                  <td style={{ padding: '8px 10px', fontSize: 12, color: '#6b7fa3' }}>
+                    {fmtDate(p.paid_at || p.created_at)}
+                  </td>
+                  <td style={{ padding: '8px 10px', fontSize: 12, color: '#1a2740', textTransform: 'capitalize' }}>
+                    {(p.payment_method || '').replace('_', ' ')}
+                  </td>
+                  <td style={{ padding: '8px 10px', fontSize: 12, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
+                    {fmtCur(p.amount, cur)}
+                  </td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                    <span title={p.status === 'overpaid' ? "Paystack confirmed this charge, but the invoice already had no balance left — needs a manual refund to the customer" : undefined}
+                      style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                      textTransform: 'capitalize',
+                      background: p.status === 'success' ? 'rgba(22,199,154,.12)'
+                        : p.status === 'failed' ? 'rgba(224,92,92,.12)'
+                        : p.status === 'overpaid' ? 'rgba(232,160,74,.14)' : 'rgba(107,127,163,.12)',
+                      color: p.status === 'success' ? '#0ea87f'
+                        : p.status === 'failed' ? '#c04040'
+                        : p.status === 'overpaid' ? '#c47a1a' : '#6b7fa3' }}>
+                      {p.status === 'overpaid' ? '⚠ Needs Refund' : p.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                    {p.status === 'pending' && (
+                      <button onClick={() => handleVerifyPayment(p.id)} disabled={verifyingId === p.id}
+                        style={{ padding: '5px 10px', border: '1px solid #1e6bbd', background: 'white',
+                          color: '#1e6bbd', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                          cursor: verifyingId === p.id ? 'not-allowed' : 'pointer' }}>
+                        {verifyingId === p.id ? 'Checking…' : 'Check Status'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {(invoice.notes || invoice.terms) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 40 }}>
           {invoice.notes && (
@@ -478,6 +632,54 @@ export default function InvoiceDetailPage() {
                   </a>
                 </div>
                 <button onClick={() => setShowPaystack(false)}
+                  style={{ width: '100%', marginTop: 10, padding: 9, border: '1px solid #e2e8f0',
+                    background: 'white', borderRadius: 8, fontSize: 12, color: '#6b7fa3', cursor: 'pointer' }}>
+                  Close
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Share pay-link modal — the branded customer-facing invoice
+          page (PublicInvoicePage.js), not a raw Paystack checkout URL.
+          The customer reviews the invoice there and only reaches
+          Paystack once they click Pay Now themselves. */}
+      {showShareLink && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,27,42,.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+          onClick={e => e.target === e.currentTarget && setShowShareLink(false)}>
+          <div style={{ background: 'white', borderRadius: 14, width: 380, padding: 24,
+            boxShadow: '0 20px 60px rgba(13,27,42,.3)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Share Pay Link</div>
+            <div style={{ fontSize: 13, color: '#6b7fa3', marginBottom: 16 }}>
+              A page the customer can open to view this invoice and pay by MoMo, card, or bank transfer.
+            </div>
+
+            {generatingShareLink ? (
+              <div style={{ textAlign: 'center', padding: 20, color: '#6b7fa3', fontSize: 13 }}>Generating…</div>
+            ) : shareLink && (
+              <>
+                <div style={{ background: '#f0f7ff', border: '1px solid #1e6bbd', borderRadius: 8,
+                  padding: '12px 14px', marginBottom: 16, fontSize: 12, color: '#1e6bbd',
+                  wordBreak: 'break-all' }}>
+                  {shareLink}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={handleCopyShareLink}
+                    style={{ flex: 1, padding: 11, border: '1px solid #1e6bbd', background: 'white',
+                      color: '#1e6bbd', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    Copy Link
+                  </button>
+                  <a href={shareLink} target="_blank" rel="noreferrer"
+                    style={{ flex: 1, padding: 11, border: 'none', background: '#1e6bbd', color: 'white',
+                      borderRadius: 8, fontSize: 13, fontWeight: 700, textAlign: 'center',
+                      textDecoration: 'none', cursor: 'pointer' }}>
+                    Preview
+                  </a>
+                </div>
+                <button onClick={() => setShowShareLink(false)}
                   style={{ width: '100%', marginTop: 10, padding: 9, border: '1px solid #e2e8f0',
                     background: 'white', borderRadius: 8, fontSize: 12, color: '#6b7fa3', cursor: 'pointer' }}>
                   Close

@@ -19,11 +19,11 @@ const fmtDate = (d) => d
   : '—';
 
 const PILLAR = {
-  environmental: { color:'#16c79a', bg:'rgba(22,199,154,.1)',
+  environmental: { color:'#C8102E', bg:'rgba(200,16,46,.1)',
     icon:'🌱', label:'Environmental' },
-  social:        { color:'#1e6bbd', bg:'rgba(30,107,189,.1)',
+  social:        { color:'#D9A521', bg:'rgba(217,165,33,.1)',
     icon:'👥', label:'Social' },
-  governance:    { color:'#7c3aed', bg:'rgba(124,58,237,.1)',
+  governance:    { color:'#046A38', bg:'rgba(4,106,56,.1)',
     icon:'⚖️', label:'Governance' },
 };
 
@@ -318,39 +318,38 @@ export default function SustainabilityPage() {
           const count    = (metricsByPillar[pillar]||[]).length;
           const catCount = (byPillar[pillar]||[]).length;
           return (
-            <div key={pillar} style={{ background:'white',
+            <div key={pillar} style={{ background:cfg.color,
               borderRadius:12, padding:20,
-              border:`1px solid ${cfg.color}30`,
-              boxShadow:'0 2px 8px rgba(13,27,42,.04)',
+              boxShadow:'0 2px 8px rgba(13,27,42,.12)',
               position:'relative', overflow:'hidden' }}>
               <div style={{ position:'absolute',
                 right:-8, top:-8, fontSize:80,
-                opacity:.05, userSelect:'none' }}>
+                opacity:.12, userSelect:'none' }}>
                 {cfg.icon}
               </div>
               <div style={{ width:44, height:44,
-                borderRadius:12, background:cfg.bg,
+                borderRadius:12, background:'rgba(255,255,255,.2)',
                 display:'flex', alignItems:'center',
                 justifyContent:'center',
                 fontSize:22, marginBottom:12 }}>
                 {cfg.icon}
               </div>
               <div style={{ fontSize:13, fontWeight:700,
-                color:cfg.color, marginBottom:8 }}>
+                color:'white', marginBottom:8 }}>
                 {cfg.label}
               </div>
               <div style={{ display:'flex', gap:24 }}>
                 <div>
                   <div style={{ fontSize:26, fontWeight:800,
-                    color:'#1a2740' }}>{count}</div>
+                    color:'white' }}>{count}</div>
                   <div style={{ fontSize:11,
-                    color:'#6b7fa3' }}>Metrics</div>
+                    color:'rgba(255,255,255,.75)' }}>Metrics</div>
                 </div>
                 <div>
                   <div style={{ fontSize:26, fontWeight:800,
-                    color:'#1a2740' }}>{catCount}</div>
+                    color:'white' }}>{catCount}</div>
                   <div style={{ fontSize:11,
-                    color:'#6b7fa3' }}>Categories</div>
+                    color:'rgba(255,255,255,.75)' }}>Categories</div>
                 </div>
               </div>
             </div>
@@ -708,24 +707,24 @@ export default function SustainabilityPage() {
             {[
               { label:'Total SDGs',
                 value:sdgImpact?.summary?.totalSDGs||0,
-                color:'#1e6bbd' },
+                color:'#C8102E' },
               { label:'SDGs with Metrics',
                 value:sdgImpact?.summary?.coveredSDGs||0,
-                color:'#16c79a' },
+                color:'#D9A521' },
               { label:'Coverage Rate',
                 value:`${sdgImpact?.summary?.coverageRate||0}%`,
-                color:'#16c79a' },
+                color:'#046A38' },
               { label:'Metrics Linked',
                 value:sdgImpact?.summary?.totalMetrics||0,
-                color:'#7c3aed' },
+                color:'#1A1A2E' },
             ].map((s,i) => (
-              <div key={i} style={{ background:'#f8fafc',
+              <div key={i} style={{ background:s.color,
                 borderRadius:10, padding:14,
-                border:'1px solid #e2e8f0' }}>
-                <div style={{ fontSize:11, color:'#6b7fa3',
+                boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
                   marginBottom:4 }}>{s.label}</div>
                 <div style={{ fontSize:22, fontWeight:800,
-                  color:s.color }}>{s.value}</div>
+                  color:'white' }}>{s.value}</div>
               </div>
             ))}
           </div>

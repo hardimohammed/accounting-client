@@ -57,96 +57,40 @@ function Modal({ open, onClose, title, children }) {
   );
 }
 
-const EMPTY_LINE = {
-  description:'', quantity:1, unitPrice:0, discountPct:0, taxRate:0
-};
-
 export default function BillListPage() {
   const navigate = useNavigate();
 
   const [bills,      setBills]     = useState([]);
-  const [suppliers,  setSuppliers] = useState([]);
   const [loading,    setLoading]   = useState(true);
   const [search,     setSearch]    = useState('');
   const [statusFilter, setStatus]  = useState('');
-  const [modal,      setModal]     = useState(false);
-  const [saving,     setSaving]    = useState(false);
-
-  const [form, setForm] = useState({
-    supplierId:'', billDate:'', dueDate:'',
-    currency:'GHS', exchangeRate:1,
-    supplierRef:'', notes:'',
-  });
-  const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
+  const [viewBill,    setViewBill]    = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
-    Promise.all([
-      api.get('/bills'),
-      api.get('/suppliers'),
-    ]).then(([b, s]) => {
-      setBills(b.data || []);
-      setSuppliers(s.data || []);
-    }).catch(console.error)
+    api.get('/bills')
+      .then(res => setBills(res.data || []))
+      .catch(console.error)
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
-  const upd = (f, v) => setForm(p => ({ ...p, [f]: v }));
-
-  // ── Line item helpers ──────────────────────────────────────
-  const updLine = (i, f, v) => {
-    setLines(prev => {
-      const copy = [...prev];
-      copy[i] = { ...copy[i], [f]: v };
-      return copy;
-    });
+  // ── Bill detail ────────────────────────────────────────────
+  const openDetail = (billId) => {
+    setViewLoading(true);
+    setViewBill(null);
+    api.get(`/bills/${billId}`)
+      .then(res => setViewBill(res.data))
+      .catch(err => alert(err.message || 'Could not load bill'))
+      .finally(() => setViewLoading(false));
   };
-  const addLine    = () => setLines(p => [...p, { ...EMPTY_LINE }]);
-  const removeLine = (i) => lines.length > 1 &&
-    setLines(p => p.filter((_, idx) => idx !== i));
+  const closeDetail = () => setViewBill(null);
 
-  // ── Totals ─────────────────────────────────────────────────
-  const calcLine = (l) => {
-    const base = (parseFloat(l.quantity)||0) * (parseFloat(l.unitPrice)||0);
-    const disc = base * ((parseFloat(l.discountPct)||0) / 100);
-    const net  = base - disc;
-    const tax  = net  * ((parseFloat(l.taxRate)||0) / 100);
-    return net + tax;
-  };
-  const subtotal = lines.reduce((s, l) => s + calcLine(l), 0);
-
-  // ── Create bill ────────────────────────────────────────────
-  const handleCreate = async () => {
-    if (!form.supplierId) return alert('Please select a supplier');
-    if (!form.billDate)   return alert('Please enter a bill date');
-    if (!form.dueDate)    return alert('Please enter a due date');
-    if (lines.some(l => !l.description))
-      return alert('All line items must have a description');
-
-    setSaving(true);
-    try {
-      const payload = {
-        ...form,
-        lines: lines.map(l => ({
-          description:  l.description,
-          quantity:     parseFloat(l.quantity)    || 1,
-          unitPrice:    parseFloat(l.unitPrice)   || 0,
-          discountPct:  parseFloat(l.discountPct) || 0,
-          taxRate:      parseFloat(l.taxRate)     || 0,
-        })),
-      };
-      const res = await api.post('/bills', payload);
-      alert(`Bill ${res.data?.billNumber} created successfully!`);
-      load();
-      setModal(false);
-      setForm({ supplierId:'', billDate:'', dueDate:'',
-        currency:'GHS', exchangeRate:1, supplierRef:'', notes:'' });
-      setLines([{ ...EMPTY_LINE }]);
-    } catch (err) {
-      alert(err.message || 'Failed to create bill');
-    } finally { setSaving(false); }
+  const runAction = async (fn) => {
+    try { await fn(); load(); closeDetail(); }
+    catch (err) { alert(err.message); }
   };
 
   // ── Actions ────────────────────────────────────────────────
@@ -158,8 +102,25 @@ export default function BillListPage() {
     } catch (err) { alert(err.message); }
   };
 
+  // Nothing in the backend ever sets a bill's status to the literal
+  // value 'overdue' (only draft/approved/partial/paid/cancelled) — a
+  // status-equality check here always evaluates to false, so the
+  // "Overdue Bills" counter, the filter dropdown's Overdue option, and
+  // the due-date/badge highlighting all silently never matched
+  // anything, no matter how overdue a real bill was. Derive it the
+  // same way InvoiceListPage.js already correctly does.
+  // Comparing against `new Date()` (the exact current instant) meant
+  // a bill due "today" showed overdue the moment any time passed
+  // midnight — it should stay current for the whole day it's due.
+  // Compare date-only strings instead.
+  const isBillOverdue = (b) =>
+    !['paid','cancelled'].includes(b.status) &&
+    String(b.due_date).slice(0, 10) < new Date().toISOString().slice(0, 10) &&
+    parseFloat(b.balance_due || 0) > 0;
+
   const filtered = bills.filter(b =>
-    (!statusFilter || b.status === statusFilter) &&
+    (!statusFilter ||
+      (statusFilter === 'overdue' ? isBillOverdue(b) : b.status === statusFilter)) &&
     (!search ||
       b.bill_number?.toLowerCase().includes(search.toLowerCase()) ||
       b.supplier_name?.toLowerCase().includes(search.toLowerCase()))
@@ -169,14 +130,9 @@ export default function BillListPage() {
   const totalBills   = bills.reduce((s,b) => s+parseFloat(b.total_amount||0),0);
   const totalPaid    = bills.reduce((s,b) => s+parseFloat(b.amount_paid ||0),0);
   const totalOutstanding = totalBills - totalPaid;
+  const totalOverdue = bills.filter(isBillOverdue).length;
 
-  const inp = { width:'100%', padding:'9px 12px',
-    border:'1.5px solid #e2e8f0', borderRadius:8, fontSize:13,
-    fontFamily:'sans-serif', background:'#f9fafb', outline:'none' };
-  const lbl = { display:'block', fontSize:11, fontWeight:600,
-    color:'#1a2740', marginBottom:6 };
   const g2  = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 };
-  const g3  = { display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 };
 
   return (
     <div style={{ fontFamily:'sans-serif' }}>
@@ -191,7 +147,7 @@ export default function BillListPage() {
             Track supplier bills, approvals and payments
           </p>
         </div>
-        <button onClick={() => setModal(true)}
+        <button onClick={() => navigate('/bills/new')}
           style={{ padding:'10px 20px', background:'#1e6bbd',
             color:'white', border:'none', borderRadius:8,
             fontSize:13, fontWeight:700, cursor:'pointer' }}>
@@ -204,19 +160,19 @@ export default function BillListPage() {
         gridTemplateColumns:'repeat(4,1fr)',
         gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Bills',    value:fmtCur(totalBills),       color:'#1e6bbd' },
-          { label:'Total Paid',     value:fmtCur(totalPaid),        color:'#16c79a' },
-          { label:'Outstanding',    value:fmtCur(totalOutstanding), color:'#e8a04a' },
+          { label:'Total Bills',    value:fmtCur(totalBills),       color:'#C8102E' },
+          { label:'Total Paid',     value:fmtCur(totalPaid),        color:'#D9A521' },
+          { label:'Outstanding',    value:fmtCur(totalOutstanding), color:'#046A38' },
           { label:'Overdue Bills',
-            value:bills.filter(b=>b.status==='overdue').length,
-            color:'#e05c5c' },
+            value:totalOverdue,
+            color:'#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white', borderRadius:12,
-            padding:16, border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+          <div key={i} style={{ background:s.color, borderRadius:12,
+            padding:16,
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
-            <div style={{ fontSize:18, fontWeight:700, color:s.color }}>
+            <div style={{ fontSize:18, fontWeight:700, color:'white' }}>
               {s.value}
             </div>
           </div>
@@ -270,7 +226,7 @@ export default function BillListPage() {
               {search||statusFilter ? 'No bills match' : 'No bills yet'}
             </p>
             {!search && !statusFilter && (
-              <button onClick={() => setModal(true)}
+              <button onClick={() => navigate('/bills/new')}
                 style={{ padding:'10px 24px', background:'#1e6bbd',
                   color:'white', border:'none', borderRadius:8,
                   fontSize:13, fontWeight:600, cursor:'pointer' }}>
@@ -295,8 +251,10 @@ export default function BillListPage() {
             <tbody>
               {filtered.map((bill,i) => {
                 const balance = parseFloat(bill.balance_due||0);
+                const overdue = isBillOverdue(bill);
                 return (
                   <tr key={i}
+                    onClick={() => openDetail(bill.id)}
                     style={{ borderBottom:'1px solid #f4f6f9',
                       cursor:'pointer' }}>
                     <td style={{ padding:'12px 16px',
@@ -313,8 +271,8 @@ export default function BillListPage() {
                       {fmtDate(bill.bill_date)}
                     </td>
                     <td style={{ padding:'12px 16px',
-                      color: bill.status==='overdue'
-                        ? '#e05c5c' : '#6b7fa3',
+                      color: overdue ? '#e05c5c' : '#6b7fa3',
+                      fontWeight: overdue ? 600 : 400,
                       fontSize:13 }}>
                       {fmtDate(bill.due_date)}
                     </td>
@@ -334,7 +292,7 @@ export default function BillListPage() {
                       {fmtCur(balance)}
                     </td>
                     <td style={{ padding:'12px 16px' }}>
-                      <Badge status={bill.status}/>
+                      <Badge status={overdue ? 'overdue' : bill.status}/>
                     </td>
                     <td style={{ padding:'12px 16px' }}>
                       <div style={{ display:'flex', gap:6 }}>
@@ -349,7 +307,7 @@ export default function BillListPage() {
                             Approve
                           </button>
                         )}
-                        {bill.status==='approved' && (
+                        {bill.status==='approved' && !bill.journal_entry_id && (
                           <button
                             onClick={async e => {
                               e.stopPropagation();
@@ -366,6 +324,25 @@ export default function BillListPage() {
                             Post to GL
                           </button>
                         )}
+                        {['approved','partial'].includes(bill.status) && balance > 0 && (
+                          <button
+                            onClick={async e => {
+                              e.stopPropagation();
+                              const amt = window.prompt(`Amount to pay (outstanding: ${fmtCur(balance)}):`, balance);
+                              if (amt === null) return;
+                              try {
+                                await api.post(`/bills/${bill.id}/pay`, { paymentMethod: 'cash', amount: parseFloat(amt) });
+                                load();
+                              } catch(err){ alert(err.message); }
+                            }}
+                            style={{ padding:'5px 10px', borderRadius:6,
+                              border:'1px solid #16c79a',
+                              background:'none', color:'#16c79a',
+                              fontSize:11, fontWeight:600,
+                              cursor:'pointer' }}>
+                            Pay
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -376,76 +353,68 @@ export default function BillListPage() {
         )}
       </div>
 
-      {/* New Bill Modal */}
-      <Modal open={modal}
-        onClose={()=>setModal(false)}
-        title="New Bill">
-        <div>
-          {/* Supplier & Dates */}
-          <div style={{ marginBottom:14 }}>
-            <label style={lbl}>Supplier *</label>
-            <select style={inp} value={form.supplierId}
-              onChange={e=>upd('supplierId',e.target.value)}>
-              <option value="">Select supplier...</option>
-              {suppliers.map(s=>(
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            {suppliers.length===0 && (
-              <p style={{ fontSize:11, color:'#e05c5c', marginTop:4 }}>
-                No suppliers found.{' '}
-                <span style={{ color:'#1e6bbd', cursor:'pointer' }}
-                  onClick={()=>{setModal(false);navigate('/suppliers');}}>
-                  Add a supplier first →
-                </span>
-              </p>
+      {/* Bill Detail Modal */}
+      <Modal open={!!viewBill || viewLoading}
+        onClose={closeDetail}
+        title={viewBill ? viewBill.bill_number : 'Loading…'}>
+        {viewLoading && !viewBill ? (
+          <div style={{ textAlign:'center', padding:30, color:'#6b7fa3' }}>Loading…</div>
+        ) : viewBill && (
+          <div>
+            {/* Not-yet-posted warning — a bill only affects stock, the
+                GL, and the supplier's balance once it's been posted
+                (journal_entry_id set); "Approve" alone is just a status
+                flag and has no financial effect on its own. */}
+            {!viewBill.journal_entry_id && (
+              <div style={{ display:'flex', alignItems:'flex-start', gap:12,
+                padding:'14px 18px', marginBottom:18, borderRadius:10,
+                background:'#fff8e6', border:'1px solid #f0d896' }}>
+                <span style={{ fontSize:20, lineHeight:1 }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:13, color:'#8a6d1a', marginBottom:3 }}>
+                    {viewBill.status === 'draft'
+                      ? 'This bill is still a draft'
+                      : 'This bill has been approved but not yet posted'}
+                  </div>
+                  <div style={{ fontSize:12.5, color:'#8a6d1a', lineHeight:1.5 }}>
+                    It hasn't affected inventory stock, the General Ledger, or the
+                    supplier's balance yet.{' '}
+                    {viewBill.status === 'draft'
+                      ? <>Click <strong>Approve</strong>, then <strong>Post to GL</strong>{' '}below to make it take effect.</>
+                      : <>Click <strong>Post to GL</strong> below to deduct stock (for any
+                          product-linked lines) and record the accounting entries.</>}
+                  </div>
+                </div>
+              </div>
             )}
-          </div>
 
-          <div style={g3}>
-            <div>
-              <label style={lbl}>Bill Date *</label>
-              <input style={inp} type="date" value={form.billDate}
-                onChange={e=>upd('billDate',e.target.value)}/>
+            <div style={g2}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:'#6b7fa3', textTransform:'uppercase', marginBottom:4 }}>Supplier</div>
+                <div style={{ fontSize:14, fontWeight:600 }}>{viewBill.supplier_name}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:'#6b7fa3', textTransform:'uppercase', marginBottom:4 }}>Status</div>
+                <Badge status={viewBill.status}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:'#6b7fa3', textTransform:'uppercase', marginBottom:4 }}>Bill Date</div>
+                <div style={{ fontSize:13 }}>{fmtDate(viewBill.bill_date)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:'#6b7fa3', textTransform:'uppercase', marginBottom:4 }}>Due Date</div>
+                <div style={{ fontSize:13 }}>{fmtDate(viewBill.due_date)}</div>
+              </div>
             </div>
-            <div>
-              <label style={lbl}>Due Date *</label>
-              <input style={inp} type="date" value={form.dueDate}
-                onChange={e=>upd('dueDate',e.target.value)}/>
-            </div>
-            <div>
-              <label style={lbl}>Currency</label>
-              <select style={inp} value={form.currency}
-                onChange={e=>upd('currency',e.target.value)}>
-                {['GHS','USD','EUR','GBP'].map(c=>(
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          <div style={{ marginTop:14 }}>
-            <label style={lbl}>Supplier Reference (optional)</label>
-            <input style={inp} placeholder="Supplier's own invoice number"
-              value={form.supplierRef}
-              onChange={e=>upd('supplierRef',e.target.value)}/>
-          </div>
-
-          {/* Line Items */}
-          <div style={{ marginTop:20 }}>
-            <div style={{ fontSize:13, fontWeight:700,
-              color:'#1a2740', marginBottom:12 }}>
-              Line Items
-            </div>
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse',
-                minWidth:600 }}>
+            <div style={{ marginTop:20 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#1a2740', marginBottom:10 }}>Line Items</div>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
                   <tr style={{ background:'#f8fafc' }}>
-                    {['Description','Qty','Unit Price','Discount %','Total',''].map(h=>(
+                    {['Description','Qty','Unit Price','Total'].map(h=>(
                       <th key={h} style={{ padding:'8px 10px',
-                        textAlign: h==='Total'||h==='Qty'||h==='Unit Price'||h==='Discount %'
-                          ? 'right' : 'left',
+                        textAlign: h==='Description' ? 'left' : 'right',
                         fontSize:10, fontWeight:600, color:'#6b7fa3',
                         textTransform:'uppercase', letterSpacing:.5,
                         borderBottom:'1px solid #e2e8f0' }}>{h}</th>
@@ -453,115 +422,71 @@ export default function BillListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lines.map((line,i)=>(
-                    <tr key={i}>
-                      <td style={{ padding:'6px 8px' }}>
-                        <input
-                          placeholder="Description of goods/service"
-                          value={line.description}
-                          onChange={e=>updLine(i,'description',e.target.value)}
-                          style={{ ...inp, padding:'6px 8px', fontSize:12 }}/>
-                      </td>
-                      <td style={{ padding:'6px 8px', width:70 }}>
-                        <input type="number" min="0" step="0.01"
-                          value={line.quantity}
-                          onChange={e=>updLine(i,'quantity',e.target.value)}
-                          style={{ ...inp, padding:'6px 8px',
-                            fontSize:12, textAlign:'right', width:60 }}/>
-                      </td>
-                      <td style={{ padding:'6px 8px', width:110 }}>
-                        <input type="number" min="0" step="0.01"
-                          value={line.unitPrice}
-                          onChange={e=>updLine(i,'unitPrice',e.target.value)}
-                          style={{ ...inp, padding:'6px 8px',
-                            fontSize:12, textAlign:'right', width:100 }}/>
-                      </td>
-                      <td style={{ padding:'6px 8px', width:90 }}>
-                        <input type="number" min="0" max="100" step="0.01"
-                          value={line.discountPct}
-                          onChange={e=>updLine(i,'discountPct',e.target.value)}
-                          style={{ ...inp, padding:'6px 8px',
-                            fontSize:12, textAlign:'right', width:80 }}/>
-                      </td>
-                      <td style={{ padding:'6px 8px', width:110,
-                        fontFamily:'monospace', fontSize:12,
-                        fontWeight:700, color:'#1e6bbd',
-                        textAlign:'right' }}>
-                        {fmtCur(calcLine(line))}
-                      </td>
-                      <td style={{ padding:'6px 8px', width:32 }}>
-                        {lines.length>1 && (
-                          <button onClick={()=>removeLine(i)}
-                            style={{ background:'none', border:'none',
-                              color:'#e05c5c', fontSize:16,
-                              cursor:'pointer', lineHeight:1 }}>×</button>
-                        )}
-                      </td>
+                  {viewBill.lines.map(l=>(
+                    <tr key={l.id} style={{ borderBottom:'1px solid #f4f6f9' }}>
+                      <td style={{ padding:'8px 10px', fontSize:12 }}>{l.description}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, textAlign:'right', fontFamily:'monospace' }}>{l.quantity}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, textAlign:'right', fontFamily:'monospace' }}>{fmtCur(l.unit_price)}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, textAlign:'right', fontFamily:'monospace', fontWeight:700 }}>{fmtCur(l.line_total)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
 
-            <div style={{ display:'flex', justifyContent:'space-between',
-              alignItems:'center', marginTop:12 }}>
-              <button onClick={addLine}
-                style={{ background:'none', border:'1.5px dashed #e2e8f0',
-                  borderRadius:7, padding:'7px 14px', fontSize:12,
-                  color:'#6b7fa3', cursor:'pointer',
-                  fontFamily:'sans-serif' }}>
-                + Add Line
-              </button>
-              <div style={{ background:'#f4f6f9', borderRadius:9,
-                padding:'12px 16px', minWidth:220 }}>
-                <div style={{ display:'flex', justifyContent:'space-between',
-                  fontSize:13, marginBottom:6 }}>
-                  <span style={{ color:'#6b7fa3' }}>Subtotal</span>
-                  <span style={{ fontFamily:'monospace',
-                    fontWeight:600 }}>{fmtCur(subtotal)}</span>
-                </div>
-                <div style={{ display:'flex', justifyContent:'space-between',
-                  fontSize:15, fontWeight:800, paddingTop:8,
-                  borderTop:'2px solid #e2e8f0', color:'#1e6bbd' }}>
-                  <span>Total</span>
-                  <span style={{ fontFamily:'monospace' }}>
-                    {fmtCur(subtotal)}
-                  </span>
+              <div style={{ display:'flex', justifyContent:'flex-end', marginTop:14 }}>
+                <div style={{ background:'#f4f6f9', borderRadius:9, padding:'12px 16px', minWidth:220 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6 }}>
+                    <span style={{ color:'#6b7fa3' }}>Total</span>
+                    <span style={{ fontFamily:'monospace', fontWeight:700 }}>{fmtCur(viewBill.total_amount)}</span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6 }}>
+                    <span style={{ color:'#6b7fa3' }}>Paid</span>
+                    <span style={{ fontFamily:'monospace', color:'#16c79a' }}>{fmtCur(viewBill.amount_paid)}</span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, fontWeight:800, paddingTop:8, borderTop:'2px solid #e2e8f0' }}>
+                    <span>Balance</span>
+                    <span style={{ fontFamily:'monospace', color: parseFloat(viewBill.balance_due)>0 ? '#e8a04a' : '#16c79a' }}>
+                      {fmtCur(viewBill.balance_due)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Notes */}
-          <div style={{ marginTop:14 }}>
-            <label style={lbl}>Notes (optional)</label>
-            <textarea
-              style={{ ...inp, height:70, resize:'vertical' }}
-              placeholder="Additional notes..."
-              value={form.notes}
-              onChange={e=>upd('notes',e.target.value)}/>
+            <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:24 }}>
+              {viewBill.status === 'draft' && (
+                <button onClick={() => runAction(() => api.post(`/bills/${viewBill.id}/approve`))}
+                  style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #16c79a',
+                    background:'none', color:'#16c79a', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  Approve
+                </button>
+              )}
+              {viewBill.status === 'approved' && !viewBill.journal_entry_id && (
+                <button onClick={() => runAction(() => api.post(`/bills/${viewBill.id}/post`))}
+                  style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #1e6bbd',
+                    background:'none', color:'#1e6bbd', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  Post to GL
+                </button>
+              )}
+              {['approved','partial'].includes(viewBill.status) && parseFloat(viewBill.balance_due) > 0 && (
+                <button onClick={() => {
+                  const amt = window.prompt(`Amount to pay (outstanding: ${fmtCur(viewBill.balance_due)}):`, viewBill.balance_due);
+                  if (amt === null) return;
+                  runAction(() => api.post(`/bills/${viewBill.id}/pay`, { paymentMethod:'cash', amount: parseFloat(amt) }));
+                }}
+                  style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #16c79a',
+                    background:'none', color:'#16c79a', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  Pay
+                </button>
+              )}
+              <button onClick={closeDetail}
+                style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #e2e8f0',
+                  background:'white', color:'#6b7fa3', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                Close
+              </button>
+            </div>
           </div>
-
-          {/* Buttons */}
-          <div style={{ display:'flex', gap:10,
-            justifyContent:'flex-end', marginTop:24 }}>
-            <button onClick={()=>setModal(false)}
-              style={{ padding:'10px 20px', borderRadius:8,
-                border:'1px solid #e2e8f0', background:'white',
-                color:'#6b7fa3', fontSize:13,
-                fontWeight:600, cursor:'pointer' }}>
-              Cancel
-            </button>
-            <button onClick={handleCreate} disabled={saving}
-              style={{ padding:'10px 20px', borderRadius:8,
-                border:'none',
-                background:saving?'#6b7fa3':'#1e6bbd',
-                color:'white', fontSize:13, fontWeight:700,
-                cursor:saving?'not-allowed':'pointer' }}>
-              {saving?'Saving...':'Create Bill'}
-            </button>
-          </div>
-        </div>
+        )}
       </Modal>
     </div>
   );

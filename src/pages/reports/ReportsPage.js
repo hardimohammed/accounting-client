@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import api from '../../api/client';
 
 const fmt = (n) => new Intl.NumberFormat('en-US', {
@@ -517,11 +517,189 @@ function TrialBalance() {
   );
 }
 
+// ── Cash Reconciliation (POS shift history) ────────────────────
+// Closing a shift computes expected/counted/variance on the spot, but
+// that comparison used to vanish the moment the cashier clicked past
+// it — nothing in either app ever surfaced it again. This is the
+// first place a manager can actually trace a past shift's variance.
+function CashReconciliation() {
+  const jan1  = `${new Date().getFullYear()}-01-01`;
+  const today = new Date().toISOString().slice(0,10);
+  const [dateFrom, setDateFrom] = useState(jan1);
+  const [dateTo,   setDateTo]   = useState(today);
+  const [status,   setStatus]   = useState('');
+  const [sessions, setSessions] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [expanded, setExpanded] = useState(null);
+  const [detail,   setDetail]   = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params = { dateFrom, dateTo, limit: 100 };
+      if (status) params.status = status;
+      const res = await api.get('/pos/sessions', { params });
+      setSessions(res.data || []);
+    } catch (err) { alert(err.message || 'Failed to load shift history'); }
+    finally { setLoading(false); }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
+
+  const toggleExpand = async (session) => {
+    if (expanded === session.id) { setExpanded(null); setDetail(null); return; }
+    setExpanded(session.id);
+    setDetailLoading(true);
+    try {
+      const res = await api.get(`/pos/sessions/${session.id}`);
+      setDetail(res.data);
+    } catch (err) { alert(err.message || 'Failed to load shift detail'); }
+    finally { setDetailLoading(false); }
+  };
+
+  const varianceColor = (v) => {
+    const n = parseFloat(v);
+    if (v === null || v === undefined || isNaN(n)) return '#6b7fa3';
+    if (Math.abs(n) < 0.01) return '#0ea87f';
+    return '#c04040';
+  };
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ display:'flex', gap:12, marginBottom:20, flexWrap:'wrap',
+        background:'white', border:'1px solid #e2e8f0',
+        borderRadius:10, padding:'12px 16px', alignItems:'center' }}>
+        <span style={{ fontSize:12, color:'#6b7fa3', fontWeight:600 }}>From</span>
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+          style={{ padding:'7px 12px', border:'1px solid #e2e8f0',
+            borderRadius:7, fontSize:12, fontFamily:'sans-serif',
+            color:'#1a2740', outline:'none' }}/>
+        <span style={{ fontSize:12, color:'#6b7fa3' }}>To</span>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+          style={{ padding:'7px 12px', border:'1px solid #e2e8f0',
+            borderRadius:7, fontSize:12, fontFamily:'sans-serif',
+            color:'#1a2740', outline:'none' }}/>
+        <span style={{ fontSize:12, color:'#6b7fa3' }}>Status</span>
+        <select value={status} onChange={e=>setStatus(e.target.value)}
+          style={{ padding:'7px 12px', border:'1px solid #e2e8f0',
+            borderRadius:7, fontSize:12, fontFamily:'sans-serif',
+            color:'#1a2740', outline:'none', background:'white' }}>
+          <option value="">All</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+        <button onClick={load} disabled={loading}
+          style={{ padding:'8px 20px', background:'#1e6bbd',
+            color:'white', border:'none', borderRadius:7,
+            fontSize:12, fontWeight:700, cursor:'pointer' }}>
+          {loading ? 'Loading...' : 'Filter'}
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:'60px 0', color:'#6b7fa3' }}>Loading shift history...</div>
+      ) : sessions.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'60px 0', color:'#6b7fa3' }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>🧾</div>
+          <p style={{ fontSize:14, fontWeight:600, color:'#1a2740' }}>No shifts in this range</p>
+        </div>
+      ) : (
+        <div style={{ background:'white', borderRadius:12,
+          border:'1px solid #e2e8f0', boxShadow:'0 2px 8px rgba(13,27,42,.04)',
+          overflow:'hidden' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc', borderBottom:'1px solid #e2e8f0' }}>
+                {['Cashier','Opened','Closed','Status','Cash Sales','MoMo','Card','Expected','Counted','Variance'].map(h=>(
+                  <th key={h} style={{ padding:'10px 14px', textAlign: h==='Cashier'||h==='Status' ? 'left' : 'right',
+                    fontSize:11, fontWeight:700, color:'#6b7fa3', textTransform:'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map(s => (
+                <Fragment key={s.id}>
+                  <tr onClick={()=>toggleExpand(s)}
+                    style={{ borderBottom:'1px solid #f1f5f9', cursor:'pointer' }}>
+                    <td style={{ padding:'10px 14px' }}>{s.first_name} {s.last_name}</td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontSize:12 }}>{fmtDate(s.opened_at)}</td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontSize:12 }}>{fmtDate(s.closed_at)}</td>
+                    <td style={{ padding:'10px 14px' }}>
+                      <span style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:20,
+                        background: s.status==='closed' ? 'rgba(107,127,163,.12)' : 'rgba(22,199,154,.12)',
+                        color: s.status==='closed' ? '#6b7fa3' : '#0ea87f' }}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontFamily:'monospace' }}>{fmtCur(s.total_cash_sales)}</td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontFamily:'monospace' }}>{fmtCur(s.total_momo_sales)}</td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontFamily:'monospace' }}>{fmtCur(s.total_card_sales)}</td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontFamily:'monospace' }}>
+                      {s.expected_cash !== null ? fmtCur(s.expected_cash) : '—'}
+                    </td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontFamily:'monospace' }}>
+                      {s.closing_cash_counted !== null ? fmtCur(s.closing_cash_counted) : '—'}
+                    </td>
+                    <td style={{ padding:'10px 14px', textAlign:'right', fontFamily:'monospace',
+                      fontWeight:700, color: varianceColor(s.variance) }}>
+                      {s.variance !== null ? fmtCur(s.variance) : '—'}
+                    </td>
+                  </tr>
+                  {expanded === s.id && (
+                    <tr key={`${s.id}-detail`}>
+                      <td colSpan={10} style={{ padding:'14px 20px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0' }}>
+                        {detailLoading ? 'Loading sales...' : (
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:700, color:'#1a2740', marginBottom:8 }}>
+                              Opening float {fmtCur(s.opening_float)} — {detail?.sales?.length || 0} sale(s) this shift
+                            </div>
+                            {(detail?.sales || []).length === 0 ? (
+                              <p style={{ fontSize:12, color:'#6b7fa3' }}>No sales recorded.</p>
+                            ) : (
+                              <table style={{ width:'100%', fontSize:12 }}>
+                                <tbody>
+                                  {detail.sales.map(sale => (
+                                    <tr key={sale.id}>
+                                      <td style={{ padding:'4px 8px' }}>{sale.sale_number}</td>
+                                      <td style={{ padding:'4px 8px' }}>{sale.payment_method}</td>
+                                      <td style={{ padding:'4px 8px' }}>
+                                        <span style={{ color: sale.payment_status==='completed' ? '#0ea87f'
+                                          : sale.payment_status==='pending' ? '#e8a04a' : '#c04040' }}>
+                                          {sale.payment_status}
+                                        </span>
+                                      </td>
+                                      <td style={{ padding:'4px 8px', textAlign:'right', fontFamily:'monospace' }}>
+                                        {fmtCur(sale.total_amount)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Reports Page ─────────────────────────────────────────
 const TABS = [
   { id:'pl',  label:'Profit & Loss',   icon:'📈' },
   { id:'bs',  label:'Balance Sheet',   icon:'⚖️' },
   { id:'tb',  label:'Trial Balance',   icon:'📋' },
+  { id:'cash',label:'Cash Reconciliation', icon:'🧾' },
 ];
 
 export default function ReportsPage() {
@@ -561,6 +739,7 @@ export default function ReportsPage() {
       {tab==='pl' && <ProfitLoss/>}
       {tab==='bs' && <BalanceSheet/>}
       {tab==='tb' && <TrialBalance/>}
+      {tab==='cash' && <CashReconciliation/>}
     </div>
   );
 }

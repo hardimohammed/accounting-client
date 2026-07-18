@@ -28,17 +28,24 @@ export default function InvoiceFormPage() {
 
   // Load reference data
   useEffect(() => {
-    Promise.all([
+    // allSettled, not all — accounts requires the accounts module
+    // (Admin/Accountant only), but Data Entry/Viewer/Manager can all
+    // reach this page too. One denied call previously sank the whole
+    // Promise.all silently, leaving the entire invoice form blank
+    // (no customers, no products, nothing) instead of just missing
+    // the GL-account override dropdown.
+    Promise.allSettled([
       customersAPI.list({ limit:200 }),
       taxAPI.types.list(),
       accountsAPI.list({ limit:200 }),
       api.get('/inventory'),
     ]).then(([c, t, a, inv]) => {
-      const taxList = t.data || [];
-      setCustomers(c.data || []);
+      const taxList = t.status === 'fulfilled' ? (t.value.data || []) : [];
+      if (c.status === 'fulfilled')  setCustomers(c.value.data || []);
       setTaxTypes(taxList);
-      setAccounts(a.data  || []);
-      setProducts(inv.products || []);
+      if (a.status === 'fulfilled')  setAccounts(a.value.data || []);
+      if (inv.status === 'fulfilled') setProducts(inv.value.data || []);
+      [c, t, a, inv].forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
 
       // Load existing invoice if editing — nested inside this .then()
       // (rather than fired in parallel) so taxList is already resolved

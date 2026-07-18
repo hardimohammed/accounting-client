@@ -197,25 +197,27 @@ export default function TaxDashboardPage() {
         gap:12, marginBottom:20 }}>
         {[
           { label:'Tax Types Configured',
-            value:taxTypes.length, color:'#1e6bbd' },
+            value:taxTypes.length, color:'#C8102E' },
           { label:'Tax Returns',
-            value:returns.length, color:'#1a2740' },
+            value:returns.length, color:'#D9A521' },
           { label:'WHT Collected',
-            value:fmtCur(totalWHT), color:'#e8a04a' },
+            value:fmtCur(totalWHT), color:'#046A38' },
+          // Keeps its warning behavior — real unremitted-tax signal,
+          // not just decorative, so it still flags red when money is
+          // actually owed instead of always showing black regardless.
           { label:'Unremitted WHT',
             value:fmtCur(unremitted),
-            color: unremitted>0 ? '#e05c5c' : '#16c79a' },
+            color: unremitted>0 ? '#e05c5c' : '#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white',
+          <div key={i} style={{ background:s.color,
             borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>
               {s.label}
             </div>
             <div style={{ fontSize:18, fontWeight:700,
-              color:s.color }}>{s.value}</div>
+              color:'white' }}>{s.value}</div>
           </div>
         ))}
       </div>

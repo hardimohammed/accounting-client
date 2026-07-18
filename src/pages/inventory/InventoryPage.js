@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import api from '../../api/client';
+import toast from 'react-hot-toast';
+import { validateImageFile } from '../../hooks/useApi';
 
 const fmt  = (n) => Number(n || 0).toLocaleString('en-GH', {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
@@ -19,11 +22,13 @@ const ProductImage = ({ src, name, size = 48 }) => {
     <img src={`${API_BASE}${src}?token=${token}`} alt={name}
       onError={() => setErr(true)}
       style={{ width: size, height: size, borderRadius: 8,
-        objectFit: 'cover', flexShrink: 0 }}/>
+        objectFit: 'cover', flexShrink: 0,
+        border: '1px solid #e2e8f0' }}/>
   );
   return (
     <div style={{ width: size, height: size, borderRadius: 8,
-      background: '#e2e8f0', display: 'flex', alignItems: 'center',
+      background: '#e2e8f0', border: '1px solid #d8dee8',
+      display: 'flex', alignItems: 'center',
       justifyContent: 'center', fontSize: size * 0.4, flexShrink: 0 }}>
       📦
     </div>
@@ -44,7 +49,7 @@ const VariantsModal = ({ product, onClose }) => {
   const load = () => {
     setLoading(true);
     api.get(`/inventory/${product.id}/variants`)
-      .then(res => setVariants(res.variants || []))
+      .then(res => setVariants(res.data || []))
       .catch(() => setError('Failed to load variants'))
       .finally(() => setLoading(false));
   };
@@ -85,6 +90,8 @@ const VariantsModal = ({ product, onClose }) => {
   };
 
   const handleImageUpload = async (variantId, file) => {
+    const problem = validateImageFile(file);
+    if (problem) return toast.error(problem);
     setUploadingImg(variantId);
     try {
       const fd = new FormData();
@@ -93,8 +100,9 @@ const VariantsModal = ({ product, onClose }) => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       load();
+      toast.success('Image updated');
     } catch (err) {
-      alert(err.response?.data?.message || 'Image upload failed');
+      toast.error(err.response?.data?.message || 'Image upload failed');
     } finally { setUploadingImg(null); }
   };
 
@@ -266,36 +274,66 @@ export default function InventoryPage() {
   const fileInputRef  = useRef();
   const imgInputRefs  = useRef({});
 
+  // allSettled, not all — a role without tax-module access still has
+  // full inventory access, and one denied/failed call (tax types is
+  // just for the "Add Product" form's tax dropdown) previously
+  // sank the whole Promise.all silently, leaving the entire page
+  // looking empty even though the products themselves loaded fine.
   const load = () => {
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       api.get('/inventory'),
       api.get('/inventory/movements'),
       api.get('/tax/types'),
     ]).then(([p, m, tx]) => {
-      setProducts(p.products || []);
-      setMovements(m.movements || []);
-      setTaxTypes(tx.data || []);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
+      if (p.status === 'fulfilled')  setProducts(p.value.data || []);
+      if (m.status === 'fulfilled')  setMovements(m.value.data || []);
+      if (tx.status === 'fulfilled') setTaxTypes(tx.value.data || []);
+      [p, m, tx].forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
+
+  // Live refresh — POS sales/refunds, stock adjustments, and invoice
+  // posting all deduct/restore stock server-side and emit this event,
+  // so this page reflects it immediately instead of only on a manual
+  // reload (it previously had no way to know stock changed elsewhere).
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    const user  = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!token || !user?.orgId) return;
+
+    const socket = io(API_BASE, { auth: { token } });
+    socket.emit('join_org', user.orgId);
+    socket.on('stock_updated', load);
+    return () => socket.disconnect();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
+    e.target.value = ''; // lets picking the exact same file again re-fire onChange
     if (!file) return;
+    const problem = validateImageFile(file);
+    if (problem) return toast.error(problem);
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+  };
+
+  // Object URLs (from URL.createObjectURL) hold the underlying blob
+  // in memory until explicitly revoked — clearing the preview state
+  // alone doesn't release it.
+  const clearImagePreview = () => {
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setImageFile(null);
   };
 
   const openCreate = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
-    setImageFile(null);
-    setImagePreview(null);
+    clearImagePreview();
     setShowModal(true);
   };
 
@@ -310,8 +348,7 @@ export default function InventoryPage() {
       valuationMethod: p.valuation_method || 'weighted_average',
       taxId: p.tax_id || '',
     });
-    setImageFile(null);
-    setImagePreview(null);
+    clearImagePreview();
     setShowModal(true);
   };
 
@@ -319,13 +356,15 @@ export default function InventoryPage() {
     setShowModal(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
-    setImageFile(null);
-    setImagePreview(null);
+    clearImagePreview();
   };
 
   const handleSubmit = async () => {
-    if (!form.sku)  return alert('SKU is required');
     if (!form.name) return alert('Product Name is required');
+    if (imageFile) {
+      const problem = validateImageFile(imageFile);
+      if (problem) return toast.error(problem);
+    }
     setSaving(true);
     try {
       if (editingId) {
@@ -342,8 +381,8 @@ export default function InventoryPage() {
           tax_id:           form.taxId || null,
         });
       } else {
+        // sku is not sent — the backend auto-generates it (PROD-0001, ...)
         const fd = new FormData();
-        fd.append('sku',              form.sku);
         fd.append('name',             form.name);
         fd.append('description',      form.description || '');
         fd.append('product_type',     form.productType);
@@ -362,13 +401,16 @@ export default function InventoryPage() {
       }
 
       load();
+      toast.success(editingId ? 'Product updated' : 'Product created');
       closeModal();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || `Failed to ${editingId ? 'update' : 'create'} product`);
+      toast.error(err.response?.data?.message || err.message || `Failed to ${editingId ? 'update' : 'create'} product`);
     } finally { setSaving(false); }
   };
 
   const handleProductImageUpload = async (productId, file) => {
+    const problem = validateImageFile(file);
+    if (problem) return toast.error(problem);
     setUploadingImg(productId);
     try {
       const fd = new FormData();
@@ -377,8 +419,9 @@ export default function InventoryPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       load();
+      toast.success('Image updated');
     } catch (err) {
-      alert('Image upload failed');
+      toast.error(err.response?.data?.message || 'Image upload failed');
     } finally { setUploadingImg(null); }
   };
 
@@ -430,26 +473,26 @@ export default function InventoryPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)',
         gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Products',   color: '#1e6bbd',
+          { label: 'Total Products',   color: '#C8102E',
             value: products.length },
-          { label: 'Inventory Value',  color: '#16c79a',
+          { label: 'Inventory Value',  color: '#D9A521',
             value: fmtC(products.reduce((s, p) =>
               s + parseFloat(p.quantity_on_hand || 0)
                 * parseFloat(p.cost_price || 0), 0)) },
-          { label: 'Low Stock Items',  color: '#e8a04a',
+          { label: 'Low Stock Items',  color: '#046A38',
             value: products.filter(p =>
               parseFloat(p.reorder_level) > 0 &&
               parseFloat(p.quantity_on_hand || 0) <= parseFloat(p.reorder_level)
             ).length },
-          { label: 'Product Types',    color: '#7c3aed',
+          { label: 'Product Types',    color: '#1A1A2E',
             value: new Set(products.map(p => p.product_type).filter(Boolean)).size },
         ].map((c, i) => (
-          <div key={i} style={{ background: 'white', borderRadius: 12,
-            padding: 20, border: '1px solid #e2e8f0',
-            boxShadow: '0 2px 8px rgba(13,27,42,.05)' }}>
+          <div key={i} style={{ background: c.color, borderRadius: 12,
+            padding: 20,
+            boxShadow: '0 2px 8px rgba(13,27,42,.12)' }}>
             <div style={{ fontSize: 28, fontWeight: 700,
-              color: c.color, marginBottom: 4 }}>{c.value}</div>
-            <div style={{ fontSize: 13, color: '#6b7fa3' }}>{c.label}</div>
+              color: 'white', marginBottom: 4 }}>{c.value}</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,.8)' }}>{c.label}</div>
           </div>
         ))}
       </div>
@@ -761,10 +804,15 @@ export default function InventoryPage() {
               {/* Form fields */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
-                  <label style={lbl}>SKU *</label>
-                  <input style={{ ...inp, ...(editingId ? { background: '#f0f2f5', color: '#6b7fa3', cursor: 'not-allowed' } : {}) }}
-                    placeholder="e.g. PROD-001" readOnly={!!editingId}
-                    value={form.sku} onChange={e => upd('sku', e.target.value)}/>
+                  <label style={lbl}>SKU</label>
+                  {editingId ? (
+                    <input style={{ ...inp, background: '#f0f2f5', color: '#6b7fa3', cursor: 'not-allowed' }}
+                      readOnly value={form.sku}/>
+                  ) : (
+                    <div style={{ ...inp, background: '#f0f2f5', color: '#6b7fa3', boxSizing: 'border-box' }}>
+                      Auto-generated on save
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={lbl}>Product Name *</label>

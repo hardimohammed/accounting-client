@@ -1,11 +1,24 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
+// This page had its own local fmtCur hardcoded to a $ prefix,
+// unlike every other page (which uses this shared, GHS-aware one) —
+// the "Outstanding Total" tile was showing dollars regardless of
+// the org's actual currency.
+import { fmtCur } from '../../hooks/useApi';
 
-// ── Helpers ───────────────────────────────────────────────────
-const fmtCur = (n) => `$${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2
-}).format(n || 0)}`;
+// 0 days = pay now/instantly (e.g. a walk-in or cash-basis customer)
+// — same field as the Net-X terms below, just the "pay immediately"
+// end of that same range, rather than a separate concept.
+const PAYMENT_TERMS_OPTIONS = [
+  { days: 0,  label: 'Due on Receipt (pay instantly)' },
+  { days: 7,  label: 'Net 7 — due in 7 days' },
+  { days: 15, label: 'Net 15 — due in 15 days' },
+  { days: 30, label: 'Net 30 — due in 30 days' },
+  { days: 45, label: 'Net 45 — due in 45 days' },
+  { days: 60, label: 'Net 60 — due in 60 days' },
+  { days: 90, label: 'Net 90 — due in 90 days' },
+];
 
 // ── Small reusable components ─────────────────────────────────
 function Badge({ status }) {
@@ -61,9 +74,9 @@ export default function CustomerListPage() {
   const [loaded,    setLoaded]    = useState(false);
 
   const [form, setForm] = useState({
-    customerCode: '', name: '', email: '', phone: '',
+    name: '', email: '', phone: '',
     address: '', city: '', country: '',
-    taxId: '', paymentTerms: 30, currency: 'USD',
+    taxId: '', paymentTerms: 30, currency: 'GHS',
   });
 
   // Load customers on first render
@@ -80,20 +93,21 @@ export default function CustomerListPage() {
   const upd = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
 
   const handleCreate = async () => {
-    if (!form.customerCode) return alert('Customer Code is required');
-    if (!form.name)         return alert('Customer Name is required');
+    if (!form.name) return alert('Customer Name is required');
 
     setSaving(true);
     try {
+      // customerCode is not sent — the backend auto-generates one
+      // (CUST-001, CUST-002, ...) from the row's own id.
       await api.post('/customers', form);
       // Reload list
       const res = await api.get('/customers');
       setCustomers(res.data || []);
       setModal(false);
       setForm({
-        customerCode: '', name: '', email: '', phone: '',
+        name: '', email: '', phone: '',
         address: '', city: '', country: '',
-        taxId: '', paymentTerms: 30, currency: 'USD',
+        taxId: '', paymentTerms: 30, currency: 'GHS',
       });
     } catch (err) {
       alert(err.message || 'Failed to create customer');
@@ -146,16 +160,16 @@ export default function CustomerListPage() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)',
         gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Customers',   value: customers.length,  color:'#1e6bbd' },
-          { label:'Active',            value: customers.filter(c => c.is_active !== 0).length, color:'#16c79a' },
-          { label:'Outstanding Total', value: fmtCur(customers.reduce((s,c) => s + parseFloat(c.outstanding_balance || 0), 0)), color:'#e8a04a' },
+          { label:'Total Customers',   value: customers.length,  color:'#C8102E' },
+          { label:'Active',            value: customers.filter(c => c.is_active !== 0).length, color:'#D9A521' },
+          { label:'Outstanding Total', value: fmtCur(customers.reduce((s,c) => s + parseFloat(c.outstanding_balance || 0), 0)), color:'#046A38' },
         ].map((s, i) => (
-          <div key={i} style={{ background:'white', borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0', boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3', fontWeight:500, marginBottom:6 }}>
+          <div key={i} style={{ background:s.color, borderRadius:12, padding:16,
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)', fontWeight:500, marginBottom:6 }}>
               {s.label}
             </div>
-            <div style={{ fontSize:22, fontWeight:700, color:s.color }}>
+            <div style={{ fontSize:22, fontWeight:700, color:'white' }}>
               {s.value}
             </div>
           </div>
@@ -228,7 +242,8 @@ export default function CustomerListPage() {
             </thead>
             <tbody>
               {filtered.map((cust, i) => (
-                <tr key={i} style={{ borderBottom:'1px solid #f4f6f9' }}>
+                <tr key={i} style={{ borderBottom:'1px solid #f4f6f9', cursor:'pointer' }}
+                  onClick={() => navigate(`/customers/${cust.id}`)}>
                   <td style={{ padding:'12px 16px', fontFamily:'monospace',
                     fontSize:12, color:'#1e6bbd', fontWeight:600 }}>
                     {cust.customer_code}
@@ -267,12 +282,14 @@ export default function CustomerListPage() {
                     {cust.currency}
                   </td>
                   <td style={{ padding:'12px 16px', color:'#6b7fa3', fontSize:13 }}>
-                    {cust.payment_terms} days
+                    {parseInt(cust.payment_terms) === 0
+                      ? 'Due on Receipt'
+                      : `Net ${cust.payment_terms}`}
                   </td>
                   <td style={{ padding:'12px 16px' }}>
                     <Badge status={cust.is_active !== 0 ? 'active' : 'inactive'}/>
                   </td>
-                  <td style={{ padding:'12px 16px' }}>
+                  <td style={{ padding:'12px 16px' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display:'flex', gap:6 }}>
                       <button
                         onClick={() => navigate(`/invoices/new?customerId=${cust.id}`)}
@@ -295,46 +312,42 @@ export default function CustomerListPage() {
         <div>
           <div style={grid2}>
             <div>
-              <label style={labelStyle}>Customer Code *</label>
-              <input style={inputStyle} placeholder="e.g. CUST-001"
-                value={form.customerCode}
-                onChange={e => upd('customerCode', e.target.value)}/>
-            </div>
-            <div>
               <label style={labelStyle}>Customer Name *</label>
               <input style={inputStyle} placeholder="Full company or person name"
                 value={form.name}
                 onChange={e => upd('name', e.target.value)}/>
             </div>
-          </div>
-
-          <div style={{ ...grid2, marginTop:14 }}>
             <div>
               <label style={labelStyle}>Email</label>
               <input style={inputStyle} type="email" placeholder="email@company.com"
                 value={form.email}
                 onChange={e => upd('email', e.target.value)}/>
             </div>
+          </div>
+
+          <div style={{ ...grid2, marginTop:14 }}>
             <div>
               <label style={labelStyle}>Phone</label>
               <input style={inputStyle} placeholder="+233 20 000 0000"
                 value={form.phone}
                 onChange={e => upd('phone', e.target.value)}/>
             </div>
-          </div>
-
-          <div style={{ ...grid2, marginTop:14 }}>
             <div>
               <label style={labelStyle}>Tax ID / TIN</label>
               <input style={inputStyle} placeholder="VAT or TIN number"
                 value={form.taxId}
                 onChange={e => upd('taxId', e.target.value)}/>
             </div>
-            <div>
-              <label style={labelStyle}>Payment Terms (days)</label>
-              <input style={inputStyle} type="number" value={form.paymentTerms}
-                onChange={e => upd('paymentTerms', parseInt(e.target.value) || 30)}/>
-            </div>
+          </div>
+
+          <div style={{ marginTop:14 }}>
+            <label style={labelStyle}>Payment Terms</label>
+            <select style={inputStyle} value={form.paymentTerms}
+              onChange={e => upd('paymentTerms', parseInt(e.target.value))}>
+              {PAYMENT_TERMS_OPTIONS.map(o => (
+                <option key={o.days} value={o.days}>{o.label}</option>
+              ))}
+            </select>
           </div>
 
           <div style={{ ...grid2, marginTop:14 }}>
@@ -357,7 +370,7 @@ export default function CustomerListPage() {
             <select style={{ ...inputStyle }}
               value={form.currency}
               onChange={e => upd('currency', e.target.value)}>
-              {['USD','EUR','GBP','GHS','NGN','KES','ZAR'].map(c => (
+              {['GHS','USD','EUR','GBP','NGN','KES','ZAR'].map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

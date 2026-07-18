@@ -2,6 +2,7 @@
 //  src/pages/projects/ProjectListPage.js
 // ============================================================
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 
 const fmtCur = (n) => `GHS ${new Intl.NumberFormat('en-US', {
@@ -51,6 +52,7 @@ function Modal({ open, onClose, title, children }) {
 }
 
 export default function ProjectListPage() {
+  const navigate = useNavigate();
   const [projects,  setProjects]  = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -59,10 +61,12 @@ export default function ProjectListPage() {
   const [filter,    setFilter]    = useState('all');
 
   const [form, setForm] = useState({
-    projectCode:'', name:'', description:'',
+    name:'', description:'',
     customerId:'', startDate:'', endDate:'',
     budgetAmount:0, currency:'GHS', status:'planning',
   });
+  const [statusProject, setStatusProject] = useState(null);
+  const [newStatus,     setNewStatus]     = useState('');
 
   const load = () => {
     setLoading(true);
@@ -81,8 +85,6 @@ export default function ProjectListPage() {
   const upd = (f, v) => setForm(p => ({ ...p, [f]: v }));
 
   const handleCreate = async () => {
-    if (!form.projectCode)
-      return alert('Project Code is required');
     if (!form.name)
       return alert('Project Name is required');
     setSaving(true);
@@ -90,11 +92,27 @@ export default function ProjectListPage() {
       await api.post('/projects', form);
       load();
       setModal(false);
-      setForm({ projectCode:'', name:'', description:'',
+      setForm({ name:'', description:'',
         customerId:'', startDate:'', endDate:'',
         budgetAmount:0, currency:'GHS', status:'planning' });
     } catch (err) {
       alert(err.message || 'Failed to create project');
+    } finally { setSaving(false); }
+  };
+
+  const openStatusModal = (proj) => {
+    setStatusProject(proj);
+    setNewStatus(proj.status);
+  };
+
+  const handleStatusUpdate = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/projects/${statusProject.id}`, { status: newStatus });
+      load();
+      setStatusProject(null);
+    } catch (err) {
+      alert(err.message || 'Failed to update status');
     } finally { setSaving(false); }
   };
 
@@ -150,22 +168,21 @@ export default function ProjectListPage() {
         gap:12, marginBottom:20 }}>
         {[
           { label:'Total Projects',
-            value:projects.length, color:'#1e6bbd' },
+            value:projects.length, color:'#C8102E' },
           { label:'Total Budget',
-            value:fmtCur(totalBudget), color:'#1a2740' },
+            value:fmtCur(totalBudget), color:'#D9A521' },
           { label:'Active',
-            value:activeCount, color:'#16c79a' },
+            value:activeCount, color:'#046A38' },
           { label:'Completed',
-            value:completedCount, color:'#6b7fa3' },
+            value:completedCount, color:'#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white',
+          <div key={i} style={{ background:s.color,
             borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
             <div style={{ fontSize:20, fontWeight:700,
-              color:s.color }}>{s.value}</div>
+              color:'white' }}>{s.value}</div>
           </div>
         ))}
       </div>
@@ -258,7 +275,9 @@ export default function ProjectListPage() {
             const sc = STATUS_COLOR[proj.status]
               || STATUS_COLOR.planning;
             return (
-              <div key={i} style={{ background:'white',
+              <div key={i}
+                onClick={() => navigate(`/projects/${proj.id}`)}
+                style={{ background:'white',
                 borderRadius:12, border:'1px solid #e2e8f0',
                 boxShadow:'0 2px 8px rgba(13,27,42,.04)',
                 overflow:'hidden',
@@ -355,6 +374,15 @@ export default function ProjectListPage() {
                       <span>📅 {fmtDate(proj.end_date)}</span>
                     )}
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openStatusModal(proj); }}
+                    style={{ marginTop:12, width:'100%',
+                      padding:'8px 12px', borderRadius:8,
+                      border:'1px solid #e2e8f0', background:'#f9fafb',
+                      color:'#1a2740', fontSize:12, fontWeight:600,
+                      cursor:'pointer' }}>
+                    Update Status
+                  </button>
                 </div>
               </div>
             );
@@ -367,20 +395,14 @@ export default function ProjectListPage() {
         onClose={() => setModal(false)}
         title="New Project">
         <div>
-          <div style={g2}>
-            <div>
-              <label style={lbl}>Project Name *</label>
-              <input style={inp}
-                placeholder="e.g. Office Renovation"
-                value={form.name}
-                onChange={e=>upd('name',e.target.value)}/>
-            </div>
-            <div>
-              <label style={lbl}>Project Code *</label>
-              <input style={inp} placeholder="e.g. PROJ-001"
-                value={form.projectCode}
-                onChange={e=>upd('projectCode',
-                  e.target.value)}/>
+          <div>
+            <label style={lbl}>Project Name *</label>
+            <input style={inp}
+              placeholder="e.g. Office Renovation"
+              value={form.name}
+              onChange={e=>upd('name',e.target.value)}/>
+            <div style={{ fontSize:11, color:'#6b7fa3', marginTop:6 }}>
+              The project code (e.g. PROJ-2026-0001) is assigned automatically.
             </div>
           </div>
 
@@ -472,6 +494,46 @@ export default function ProjectListPage() {
                 color:'white', fontSize:13, fontWeight:700,
                 cursor:saving?'not-allowed':'pointer' }}>
               {saving?'Creating...':'Create Project'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Update Status Modal */}
+      <Modal open={!!statusProject}
+        onClose={() => setStatusProject(null)}
+        title={`Update Status — ${statusProject?.project_code || ''}`}>
+        <div>
+          <p style={{ fontSize:13, color:'#6b7fa3', marginBottom:16 }}>
+            {statusProject?.name}
+          </p>
+          <div>
+            <label style={lbl}>Status</label>
+            <select style={inp} value={newStatus}
+              onChange={e=>setNewStatus(e.target.value)}>
+              {['planning','active','on_hold','completed','cancelled'].map(s => (
+                <option key={s} value={s}>
+                  {s.replace('_',' ').replace(/^\w/, c=>c.toUpperCase())}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display:'flex', gap:10,
+            justifyContent:'flex-end', marginTop:24 }}>
+            <button onClick={() => setStatusProject(null)}
+              style={{ padding:'10px 20px', borderRadius:8,
+                border:'1px solid #e2e8f0', background:'white',
+                color:'#6b7fa3', fontSize:13,
+                fontWeight:600, cursor:'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={handleStatusUpdate} disabled={saving}
+              style={{ padding:'10px 20px', borderRadius:8,
+                border:'none',
+                background:saving?'#6b7fa3':'#1e6bbd',
+                color:'white', fontSize:13, fontWeight:700,
+                cursor:saving?'not-allowed':'pointer' }}>
+              {saving?'Saving...':'Save Status'}
             </button>
           </div>
         </div>

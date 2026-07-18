@@ -10,8 +10,8 @@ const fmtCur = (n) => `GHS ${new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2 }).format(n || 0)}`;
 
 const EMPTY_LINE = {
-  description: '', quantity: 1,
-  unitPrice: 0, discountPct: 0, taxRate: 0,
+  productId: '', description: '', quantity: 1,
+  unitPrice: 0, discountPct: 0, taxRate: 0, accountId: '',
 };
 
 export default function BillFormPage() {
@@ -23,6 +23,8 @@ export default function BillFormPage() {
   const preSupId   = params.get('supplierId') || '';
 
   const [suppliers, setSuppliers] = useState([]);
+  const [accounts,  setAccounts]  = useState([]);
+  const [products,  setProducts]  = useState([]);
   const [saving,    setSaving]    = useState(false);
   const [lines,     setLines]     = useState([{ ...EMPTY_LINE }]);
   const [form, setForm] = useState({
@@ -39,6 +41,13 @@ export default function BillFormPage() {
     api.get('/suppliers')
       .then(res => setSuppliers(res.data || []))
       .catch(console.error);
+    api.get('/accounts')
+      .then(res => setAccounts((res.data || []).filter(a =>
+        ['asset','expense'].includes(a.classification))))
+      .catch(console.error);
+    api.get('/inventory?limit=200')
+      .then(res => setProducts(res.data || []))
+      .catch(console.error);
   }, []);
 
   const upd = (f, v) => setForm(p => ({ ...p, [f]: v }));
@@ -47,6 +56,13 @@ export default function BillFormPage() {
     setLines(prev => {
       const copy = [...prev];
       copy[i] = { ...copy[i], [f]: v };
+      if (f === 'productId') {
+        const p = products.find(p => p.id == v);
+        if (p) {
+          copy[i].description = p.name;
+          copy[i].unitPrice   = parseFloat(p.cost_price) || 0;
+        }
+      }
       return copy;
     });
   };
@@ -81,11 +97,13 @@ export default function BillFormPage() {
       const payload = {
         ...form,
         lines: lines.map(l => ({
+          productId:    l.productId || null,
           description:  l.description,
           quantity:     parseFloat(l.quantity)    || 1,
           unitPrice:    parseFloat(l.unitPrice)   || 0,
           discountPct:  parseFloat(l.discountPct) || 0,
           taxRate:      parseFloat(l.taxRate)     || 0,
+          accountId:    l.accountId || null,
         })),
       };
       const res = await api.post('/bills', payload);
@@ -234,13 +252,13 @@ export default function BillFormPage() {
         <div style={cardHead}>Line Items</div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%',
-            borderCollapse: 'collapse', minWidth: 640 }}>
+            borderCollapse: 'collapse', minWidth: 960 }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Description','Qty','Unit Price',
+                {['Product','Description','Account','Qty','Unit Price',
                   'Discount %','Line Total',''].map(h => (
                   <th key={h} style={{ padding: '9px 12px',
-                    textAlign: h === 'Description'
+                    textAlign: ['Product','Description','Account'].includes(h)
                       ? 'left' : 'right',
                     fontSize: 10, fontWeight: 600,
                     color: '#6b7fa3',
@@ -256,6 +274,23 @@ export default function BillFormPage() {
               {lines.map((line, i) => (
                 <tr key={i}
                   style={{ borderBottom: '1px solid #f4f6f9' }}>
+                  {/* Product (optional — linking one makes this bill
+                      receive stock for it when posted to GL) */}
+                  <td style={{ padding: '8px 6px', width: 170 }}>
+                    <select
+                      value={line.productId}
+                      onChange={e => updLine(
+                        i, 'productId', e.target.value)}
+                      style={{ ...inp, padding: '7px 8px',
+                        fontSize: 12, width: 160 }}>
+                      <option value="">— None (not stock) —</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   {/* Description */}
                   <td style={{ padding: '8px 10px' }}>
                     <input
@@ -265,6 +300,22 @@ export default function BillFormPage() {
                         i, 'description', e.target.value)}
                       style={{ ...inp, padding: '7px 10px',
                         fontSize: 12, minWidth: 200 }}/>
+                  </td>
+                  {/* Account */}
+                  <td style={{ padding: '8px 6px', width: 170 }}>
+                    <select
+                      value={line.accountId}
+                      onChange={e => updLine(
+                        i, 'accountId', e.target.value)}
+                      style={{ ...inp, padding: '7px 8px',
+                        fontSize: 12, width: 160 }}>
+                      <option value="">Default (Misc Expense)</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.code} — {a.name}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   {/* Qty */}
                   <td style={{ padding: '8px 6px', width: 80 }}>

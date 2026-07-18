@@ -32,19 +32,39 @@ function Badge({ status }) {
 export default function JournalListPage() {
   const navigate = useNavigate();
   const [entries,  setEntries]  = useState([]);
+  const [stats,    setStats]    = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [search,   setSearch]   = useState('');
   const [statusF,  setStatusF]  = useState('');
 
+  // Search/status are sent to the server (it already supports both
+  // query params) rather than filtered client-side over whatever
+  // page happens to be loaded — a search for an entry beyond the
+  // first page previously looked like "not found" even when it
+  // existed. Stats come from a separate, unpaginated aggregate
+  // endpoint so the summary tiles reflect true totals, not just the
+  // fetched page.
   const load = () => {
     setLoading(true);
-    api.get('/journals')
-      .then(res => setEntries(res.data || []))
+    Promise.all([
+      api.get('/journals', { params: { limit: 100, status: statusF || undefined, search: search || undefined } }),
+      api.get('/journals/stats'),
+    ])
+      .then(([listRes, statsRes]) => {
+        setEntries(listRes.data || []);
+        setStats(statsRes.data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  // Single effect covers both the initial load and subsequent
+  // search/status changes — debounced so typing doesn't fire a
+  // request per keystroke, but still runs immediately on mount.
+  useEffect(() => {
+    const t = setTimeout(load, 300);
+    return () => clearTimeout(t);
+  }, [search, statusF]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePost = async (id, e) => {
     e.stopPropagation();
@@ -64,16 +84,9 @@ export default function JournalListPage() {
     } catch (err) { alert(err.message); }
   };
 
-  const filtered = entries.filter(e =>
-    (!statusF || e.status === statusF) &&
-    (!search ||
-      e.entry_number?.toLowerCase().includes(search.toLowerCase()) ||
-      e.description?.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const totalPosted = entries.filter(e => e.status === 'posted').length;
-  const totalDebits = entries.reduce((s, e) =>
-    s + parseFloat(e.total_debits || 0), 0);
+  // search/statusF are already applied server-side (see load()), so
+  // entries IS the filtered set — no client-side re-filtering needed.
+  const filtered = entries;
 
   return (
     <div style={{ fontFamily:'sans-serif' }}>
@@ -105,23 +118,22 @@ export default function JournalListPage() {
         gap:12, marginBottom:20 }}>
         {[
           { label:'Total Entries',
-            value:entries.length, color:'#1e6bbd' },
+            value:stats?.total_entries ?? 0, color:'#C8102E' },
           { label:'Posted to GL',
-            value:totalPosted, color:'#16c79a' },
+            value:stats?.total_posted ?? 0, color:'#D9A521' },
           { label:'Draft',
-            value:entries.filter(e=>e.status==='draft').length,
-            color:'#e8a04a' },
+            value:stats?.total_draft ?? 0,
+            color:'#046A38' },
           { label:'Total Debits Posted',
-            value:fmtCur(totalDebits), color:'#1a2740' },
+            value:fmtCur(stats?.total_debits_posted), color:'#1A1A2E' },
         ].map((s,i) => (
-          <div key={i} style={{ background:'white',
+          <div key={i} style={{ background:s.color,
             borderRadius:12, padding:16,
-            border:'1px solid #e2e8f0',
-            boxShadow:'0 2px 8px rgba(13,27,42,.04)' }}>
-            <div style={{ fontSize:11, color:'#6b7fa3',
+            boxShadow:'0 2px 8px rgba(13,27,42,.1)' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.75)',
               fontWeight:500, marginBottom:6 }}>{s.label}</div>
             <div style={{ fontSize:20, fontWeight:700,
-              color:s.color }}>{s.value}</div>
+              color:'white' }}>{s.value}</div>
           </div>
         ))}
       </div>

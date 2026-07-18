@@ -66,12 +66,21 @@ export function AuthProvider({ children }) {
     return user?.roles?.includes(role) || user?.roles?.includes('Admin');
   }, [user]);
 
+  // Module-level check — mirrors what the server's authorizeModule()
+  // actually enforces (see accounting-api's role.routes.js, where an
+  // Admin can edit which modules a role can see), rather than a
+  // hardcoded role-name list baked into this app. Admin still
+  // bypasses unconditionally, same reasoning as hasRole().
+  const hasModule = useCallback((moduleKey) => {
+    return user?.permissions?.includes(moduleKey) || user?.roles?.includes('Admin');
+  }, [user]);
+
   const isAuthenticated = !!user;
 
   return (
     <AuthContext.Provider value={{
       user, loading, isAuthenticated,
-      login, register, logout, refreshUser, hasRole,
+      login, register, logout, refreshUser, hasRole, hasModule,
     }}>
       {children}
     </AuthContext.Provider>
