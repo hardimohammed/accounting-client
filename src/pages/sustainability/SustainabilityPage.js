@@ -71,7 +71,6 @@ export default function SustainabilityPage() {
   const [sdgGoals,   setSdgGoals]  = useState([]);
   const [sdgImpact,  setSdgImpact] = useState(null);
   const [org,        setOrg]       = useState(null);
-  const [loading,    setLoading]   = useState(true);
   const [modal,      setModal]     = useState(false);
   const [saving,     setSaving]    = useState(false);
   const [suggested,  setSuggested] = useState([]);
@@ -87,7 +86,6 @@ export default function SustainabilityPage() {
   });
 
   const load = useCallback(() => {
-    setLoading(true);
     Promise.all([
       api.get('/sustainability'),
       api.get('/sustainability/categories'),
@@ -101,8 +99,7 @@ export default function SustainabilityPage() {
       setSdgGoals(s.data   || []);
       setSdgImpact(imp.data || { sdgs:[], summary:{} });
       setOrg(o.data);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
+    }).catch(console.error);
   }, []);
 
   useEffect(() => { load(); }, [load]);

@@ -52,7 +52,7 @@ export function useList(apiFn, initialParams = {}) {
     }
   }, [apiFn, params]);
 
-  useEffect(() => { load(); }, [params]);
+  useEffect(() => { load(); }, [load]);
 
   const updateParams = useCallback((updates) => {
     setParams(prev => ({ ...prev, ...updates, page: updates.page ?? 1 }));

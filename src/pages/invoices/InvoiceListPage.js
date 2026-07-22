@@ -69,6 +69,10 @@ export default function InvoiceListPage() {
     }
   };
 
+  // load isn't memoized and closes over `search` too, but reload should
+  // only happen on page/status changes here — search is applied
+  // explicitly via handleSearchSubmit (Enter key), not on every keystroke.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [page, statusFilter]);
 
   const handleSearch = (e) => {

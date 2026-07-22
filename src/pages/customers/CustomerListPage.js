@@ -70,8 +70,6 @@ export default function CustomerListPage() {
   const [search,    setSearch]    = useState('');
   const [modal,     setModal]     = useState(false);
   const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
-  const [loaded,    setLoaded]    = useState(false);
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -82,11 +80,8 @@ export default function CustomerListPage() {
   // Load customers on first render
   useState(() => {
     api.get('/customers')
-      .then(res => {
-        setCustomers(res.data || []);
-        setLoaded(true);
-      })
-      .catch(err => setError(err.message))
+      .then(res => setCustomers(res.data || []))
+      .catch(err => console.error(err))
       .finally(() => setLoading(false));
   });
 

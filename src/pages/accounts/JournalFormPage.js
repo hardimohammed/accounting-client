@@ -62,7 +62,7 @@ export default function JournalFormPage() {
       }
     };
     fetchData();
-  }, [id]);
+  }, [id, isEdit]);
 
   const upd    = (f, v) => setForm(p => ({ ...p, [f]: v }));
   const updLine = (i, f, v) => {

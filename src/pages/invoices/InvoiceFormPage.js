@@ -18,7 +18,6 @@ export default function InvoiceFormPage() {
   const [saving,     setSaving]     = useState(false);
   const [customers,  setCustomers]  = useState([]);
   const [taxTypes,   setTaxTypes]   = useState([]);
-  const [accounts,   setAccounts]   = useState([]);
   const [products,   setProducts]   = useState([]);
   const [lines,      setLines]      = useState([{ ...emptyLine }]);
   const [header,     setHeader]     = useState({
@@ -43,7 +42,6 @@ export default function InvoiceFormPage() {
       const taxList = t.status === 'fulfilled' ? (t.value.data || []) : [];
       if (c.status === 'fulfilled')  setCustomers(c.value.data || []);
       setTaxTypes(taxList);
-      if (a.status === 'fulfilled')  setAccounts(a.value.data || []);
       if (inv.status === 'fulfilled') setProducts(inv.value.data || []);
       [c, t, a, inv].forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
 
@@ -65,7 +63,7 @@ export default function InvoiceFormPage() {
             template:     invData.template || 'default',
           });
           setLines(invData.lines.map(l => {
-            const tx = taxList.find(t => t.id == l.tax_id);
+            const tx = taxList.find(t => String(t.id) === String(l.tax_id));
             return {
               productId:   l.product_id || null,
               description: l.description,
@@ -106,11 +104,11 @@ export default function InvoiceFormPage() {
       const copy = [...prev];
       copy[i] = { ...copy[i], [field]: value };
       if (field === 'taxId') {
-        const tx = taxTypes.find(t => t.id == value);
+        const tx = taxTypes.find(t => String(t.id) === String(value));
         copy[i].taxRate = tx ? parseFloat(tx.rate) : 0;
       }
       if (field === 'productId') {
-        const p = products.find(p => p.id == value);
+        const p = products.find(p => String(p.id) === String(value));
         if (p) {
           copy[i].description = p.name;
           copy[i].unitPrice   = parseFloat(p.selling_price) || 0;

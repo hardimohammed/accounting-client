@@ -57,7 +57,7 @@ export default function BillFormPage() {
       const copy = [...prev];
       copy[i] = { ...copy[i], [f]: v };
       if (f === 'productId') {
-        const p = products.find(p => p.id == v);
+        const p = products.find(p => String(p.id) === String(v));
         if (p) {
           copy[i].description = p.name;
           copy[i].unitPrice   = parseFloat(p.cost_price) || 0;
@@ -137,8 +137,6 @@ export default function BillFormPage() {
     fontWeight: 700, fontSize: 14,
   };
   const cardBody = { padding: 20 };
-  const g2 = { display: 'grid',
-    gridTemplateColumns: '1fr 1fr', gap: 14 };
   const g3 = { display: 'grid',
     gridTemplateColumns: '1fr 1fr 1fr', gap: 14 };
 
