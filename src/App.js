@@ -210,6 +210,11 @@ function LoginPage() {
           </span>
         </p>
       </div>
+      <p style={{ position:'fixed', bottom:16, left:0, right:0,
+        zIndex:1, textAlign:'center', margin:0,
+        fontSize:11, color:'rgba(255,255,255,.55)' }}>
+        © {new Date().getFullYear()} FinSuite Pro. All rights reserved.
+      </p>
     </div>
   );
 }
@@ -368,6 +373,11 @@ function RegisterPage() {
               cursor:'pointer' }}>Sign in</span>
         </p>
       </div>
+      <p style={{ position:'fixed', bottom:16, left:0, right:0,
+        zIndex:1, textAlign:'center', margin:0,
+        fontSize:11, color:'rgba(255,255,255,.55)' }}>
+        © {new Date().getFullYear()} FinSuite Pro. All rights reserved.
+      </p>
     </div>
   );
 }
@@ -630,6 +640,14 @@ function AppLayout() {
           <Suspense fallback={<PageLoading/>}>
             <Outlet/>
           </Suspense>
+        </div>
+
+        {/* Footer */}
+        <div style={{ height:32, flexShrink:0, background:'white',
+          borderTop:'1px solid #e2e8f0', display:'flex',
+          alignItems:'center', justifyContent:'center',
+          fontSize:11, color:'#6b7fa3' }}>
+          © {new Date().getFullYear()} FinSuite Pro. All rights reserved.
         </div>
       </div>
     </div>
